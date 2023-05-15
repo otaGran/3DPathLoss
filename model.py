@@ -215,7 +215,7 @@ class SkynetModel(nn.Module):
         frequency[features[:,7] == 1] = torch.tensor(2.63)
         frequency[features[:,7] != 1] = torch.tensor(0.811)
         offset[features[:,7] == 1] = torch.tensor(self.offset_2630, dtype = torch.float)
-        offset[features[:,7] != 1] = torch.tensor(self.offset_811, dtype= torch.floast)
+        offset[features[:,7] != 1] = torch.tensor(self.offset_811, dtype= torch.float)
         return frequency, offset
 
     def MSE_physicsmodel(self, distance, targets):
