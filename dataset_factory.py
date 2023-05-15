@@ -44,8 +44,8 @@ def dataset_factory(use_images=True, image_folder="raw_data/mapbox_api", transfo
     if transform:
         composed = transforms.Compose([transforms.ToPILImage(), transforms.Grayscale(), transforms.RandomAffine(data_augment_angle, shear=10), transforms.ToTensor()])
     else:
-        composed = None
-    
+        #composed = None
+        composed = transforms.Compose([transforms.ToPILImage(), transforms.Grayscale(), transforms.ToTensor()])
     # Dataset
     train_dataset = DrivetestDataset(features, targets, images, target_mu, target_std, features_mu, features_std, use_images, image_folder, transform=composed)
     #valid_dataset = DrivetestDataset(images, features, targets, valid_idx, target_mu, target_std, features_mean, features_std, use_images, image_folder)
