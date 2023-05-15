@@ -125,8 +125,9 @@ def get_samples_test_route(X_df, Y_df, route):
         
         # Store indicies
         route_index.append(filtered_geo_df.index)
-        
+
     route_index_flattened = flatten_list(route_index)
+    route_index_flattened = [*set(route_index_flattened)]
         
     X_df_test = X_df.loc[route_index_flattened]
     Y_df_test = Y_df.loc[route_index_flattened]
