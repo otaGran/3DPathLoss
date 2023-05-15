@@ -1,0 +1,6 @@
+h5py
+Shapely==1.8.4
+pandas==1.5.3
+geopandas==0.12.2
+matplotlib
+descartes
