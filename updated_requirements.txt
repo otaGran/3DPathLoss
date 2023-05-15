@@ -4,3 +4,12 @@ pandas==1.5.3
 geopandas==0.12.2
 matplotlib
 descartes
+
+
+torch
+scikit-learn
+torchvision
+scikit-image
+tikzplotlib
+experimentlogger-jathr
+tqdm
