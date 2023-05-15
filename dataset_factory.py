@@ -9,22 +9,22 @@ from skimage import io, transform
 import os
 import matplotlib.pyplot as plt
 
-def dataset_factory(use_images=True, image_folder="raw_data\\mapbox_api", transform=True, data_augment_angle=10):
+def dataset_factory(use_images=True, image_folder="raw_data/mapbox_api", transform=True, data_augment_angle=10):
     #Longitude,Latitude,Speed,Distance,Distance_x,Distance_y,PCI_64,PCI_65,PCI_302	
     selected_features = [0, 1, 3, 4, 5, 6, 7, 8] #
      # ['SINR', 'RSRP', 'RSRQ', 'Power']	
     selected_targets = [1]
     dataset_path='dataset' 
-    features = np.load("{}\\training_features.npy".format(dataset_path))
-    targets = np.load("{}\\training_targets.npy".format(dataset_path))
-    test_features =  np.load("{}\\test_features.npy".format(dataset_path))
-    test_targets = np.load("{}\\test_targets.npy".format(dataset_path))    
-    target_mu = np.load("{}\\targets_mu.npy".format(dataset_path))    
-    target_std = np.load("{}\\targets_std.npy".format(dataset_path))    
-    features_mu = np.load("{}\\features_mu.npy".format(dataset_path))    
-    features_std = np.load("{}\\features_std.npy".format(dataset_path))
-    images = np.load("{}\\train_image_idx.npy".format(dataset_path))
-    test_images = np.load("{}\\test_image_idx.npy".format(dataset_path))
+    features = np.load("{}/training_features.npy".format(dataset_path))
+    targets = np.load("{}/training_targets.npy".format(dataset_path))
+    test_features =  np.load("{}/test_features.npy".format(dataset_path))
+    test_targets = np.load("{}/test_targets.npy".format(dataset_path))
+    target_mu = np.load("{}/targets_mu.npy".format(dataset_path))
+    target_std = np.load("{}/targets_std.npy".format(dataset_path))
+    features_mu = np.load("{}/features_mu.npy".format(dataset_path))
+    features_std = np.load("{}/features_std.npy".format(dataset_path))
+    images = np.load("{}/train_image_idx.npy".format(dataset_path))
+    test_images = np.load("{}/test_image_idx.npy".format(dataset_path))
 
     
     features = features[:, selected_features]

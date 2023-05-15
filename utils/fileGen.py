@@ -98,16 +98,16 @@ class fileGen():
         
     def generate_files(self, root_dir='dataset'):
         # Save arrays
-        np.save('{}\\training_features.npy'.format(root_dir), self.X_df_train.values)
-        np.save('{}\\training_targets.npy'.format(root_dir), self.Y_df_train.values)
-        np.save('{}\\test_features.npy'.format(root_dir), self.X_df_test.values)
-        np.save('{}\\test_targets.npy'.format(root_dir), self.Y_df_test.values)
-        np.save('{}\\features_mu.npy'.format(root_dir), self.mean_X)
-        np.save('{}\\features_std.npy'.format(root_dir), self.std_X)
-        np.save('{}\\targets_mu.npy'.format(root_dir), self.mean_y)
-        np.save('{}\\targets_std.npy'.format(root_dir), self.std_y)
-        np.save('{}\\train_image_idx.npy'.format(root_dir), self.train_image_idx)
-        np.save('{}\\test_image_idx.npy'.format(root_dir), self.test_image_idx)
+        np.save('{}/training_features.npy'.format(root_dir), self.X_df_train.values)
+        np.save('{}/training_targets.npy'.format(root_dir), self.Y_df_train.values)
+        np.save('{}/test_features.npy'.format(root_dir), self.X_df_test.values)
+        np.save('{}/test_targets.npy'.format(root_dir), self.Y_df_test.values)
+        np.save('{}/features_mu.npy'.format(root_dir), self.mean_X)
+        np.save('{}/features_std.npy'.format(root_dir), self.std_X)
+        np.save('{}/targets_mu.npy'.format(root_dir), self.mean_y)
+        np.save('{}/targets_std.npy'.format(root_dir), self.std_y)
+        np.save('{}/train_image_idx.npy'.format(root_dir), self.train_image_idx)
+        np.save('{}/test_image_idx.npy'.format(root_dir), self.test_image_idx)
         print(self.X_df_train.columns)
         print(self.Y_df_train.columns)
         
