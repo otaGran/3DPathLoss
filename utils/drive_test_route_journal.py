@@ -120,7 +120,7 @@ def get_samples_test_route(X_df, Y_df, route):
         boundary_box = create_boundary_box(start, end, box_width)
         route.add_boundary_box(boundary_box)
         
-        filtered_geo_df = geo_df.loc[geo_df.geometry.intersects(boundary_box.ix[0])]
+        filtered_geo_df = geo_df.loc[geo_df.geometry.intersects(boundary_box.iloc[0])]
         filtered_geo_df = sort_by_heading(start,end,filtered_geo_df)
         
         # Store indicies
@@ -171,7 +171,7 @@ def get_training_test_data(X_df, Y_df, draw=False):
             ax.set_ylabel(output)
         
         plt.show()
-                
+
     X_df_train = X_df_train.drop('geometry',axis=1)
     X_df_test = X_df_test.drop('geometry',axis=1)
 
