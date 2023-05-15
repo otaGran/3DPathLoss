@@ -3,7 +3,7 @@ from torch import nn
 import torch
 import matplotlib.pyplot as plt
 from dataset_factory import dataset_factory
-import matplotlib2tikz
+import tikzplotlib
 from pathloss_38901 import pathloss_38901
 import numpy as np
 
@@ -120,7 +120,7 @@ class SkynetModel(nn.Module):
         self.nn2.append(nn.BatchNorm1d(16))
         self.nn2.append(nn.Linear(16, 1))
 
-        if self.cuda:
+        if self.is_cuda:
             self = self.cuda()
         else:
             self = self.cpu()
@@ -186,7 +186,8 @@ class SkynetModel(nn.Module):
             L(d) = P_tx - loss(d) + offset        
 
         """
-        if self.cuda():
+        #if self.cuda():
+        if not self.is_cuda:
             distance = distance.cpu()
         loss = pathloss_38901(distance.numpy(), frequency.numpy())
         loss = torch.from_numpy(loss)
