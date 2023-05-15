@@ -187,7 +187,7 @@ class SkynetModel(nn.Module):
 
         """
         #if self.cuda():
-        if not self.is_cuda:
+        if self.is_cuda:
             distance = distance.cpu()
         loss = pathloss_38901(distance.numpy(), frequency.numpy())
         loss = torch.from_numpy(loss)
