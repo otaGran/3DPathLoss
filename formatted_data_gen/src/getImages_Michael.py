@@ -75,12 +75,10 @@ def rotate_point_about_antenna(lat_Rx, long_Rx, lat_Tx, long_Tx, pad_frac, zoom_
         rot_matrix = get_rotation_mat(lat_Rx, long_Rx, lat_Tx, long_Tx, scale=scale, zoom_level=zoom_level,
                                       orig_img_shape=orig_img_shape, pad_frac=pad_frac)
     point = np.ones(3)
-    # long_lat_to_arr_idx returns the array index, hence we need to transform the indices
     (point[0], point[1]) = (orig_img_shape[1] / 2 + orig_img_shape[1] * pad_frac,
                             orig_img_shape[0] / 2 + orig_img_shape[0] * pad_frac)
     # swapping to (x,y) for rotation
     # transforming the shifted (x,y) location using the rotation matrix, i.e. provides (col, row) indexing into padded img
-    # print(np.matmul(rot_matrix, point.T)[-1], np.matmul(rot_matrix, point.T)[0])
     return np.matmul(rot_matrix, point.T)[::-1]
 
 
