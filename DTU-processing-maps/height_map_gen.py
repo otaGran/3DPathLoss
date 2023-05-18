@@ -107,26 +107,26 @@ def get_chip(padded_img, test_lon, test_lat, arr_dimension=chip_dimension):
                    int(col_rot-arr_dimension/2):int(col_rot+arr_dimension/2)]
 
 
-"""This code combines the four height maps (tiff files) into a single array according to geographical information
-and pads the combined image to enable rotation without cutting off edges."""
-directory = 'DSM_6188_720_2x2/'
-name = 'DSM_1km_'
-im1_TL = Image.open(directory + name + '6188_720_TL.tif')
-im2_TR = Image.open(directory + name + '6188_721_TR.tif')
-im3_BL = Image.open(directory + name + '6187_720_BL.tif')
-im4_BR = Image.open(directory + name + '6187_721_BR.tif')
-(row_len, col_len) = np.asarray(im1_TL).shape
-im_arr = np.zeros((row_len * 2, col_len * 2))
-im_arr[0:row_len, 0:col_len] = np.asarray(im1_TL)
-im_arr[0:row_len, col_len:col_len*2] = np.asarray(im2_TR)
+def combine_height_maps(pad_fraction):
+    """This code combines the four height maps (tiff files) into a single array according to geographical information
+    and pads the combined image to enable rotation without cutting off edges."""
+    directory = 'DSM_6188_720_2x2/'
+    name = 'DSM_1km_'
+    im1_TL = Image.open(directory + name + '6188_720_TL.tif')
+    im2_TR = Image.open(directory + name + '6188_721_TR.tif')
+    im3_BL = Image.open(directory + name + '6187_720_BL.tif')
+    im4_BR = Image.open(directory + name + '6187_721_BR.tif')
+    (row_len, col_len) = np.asarray(im1_TL).shape
+    im_arr = np.zeros((row_len * 2, col_len * 2))
+    im_arr[0:row_len, 0:col_len] = np.asarray(im1_TL)
+    im_arr[0:row_len, col_len:col_len*2] = np.asarray(im2_TR)
 
-im_arr[row_len:2*row_len, 0:col_len] = np.asarray(im3_BL)
-im_arr[row_len:2*row_len, col_len:col_len*2] = np.asarray(im4_BR)
+    im_arr[row_len:2*row_len, 0:col_len] = np.asarray(im3_BL)
+    im_arr[row_len:2*row_len, col_len:col_len*2] = np.asarray(im4_BR)
 
-rrr, ccc = im_arr.shape
-pad_fraction = 0.2
-im_arr_padded = np.pad(array=im_arr, pad_width=(int(rrr * pad_fraction), int(ccc * pad_fraction)), mode='edge')
-
+    rrr, ccc = im_arr.shape
+    im_arr_padded = np.pad(array=im_arr, pad_width=(int(rrr * pad_fraction), int(ccc * pad_fraction)), mode='edge')
+    return im_arr_padded
 
 # get_chip(padded_img=im_arr_padded, test_lon=0, test_lat=0, arr_dimension=chip_dimension)
 
@@ -135,11 +135,14 @@ I thought that (longitude, latitude) = (x,y) are fed into maps,
 but the correct version is (latitude, longitude) = (y,x) that should be fed into maps. I incorrectly thought 
 (longitude, latitude) = (x,y)."""
 
+padded_img = combine_height_maps(pad_fraction=0.2)
 df_feature = pd.read_csv('../raw_data/feature_matrix.csv')
-for r_df in range(len(df_feature)):
-    temp_long = df_feature['Latitude'][r_df]
-    temp_lati = df_feature['Longitude'][r_df]
-    temp_chip = get_chip(padded_img=im_arr_padded, test_lon=temp_long, test_lat=temp_lati, arr_dimension=chip_dimension)
-    im = Image.fromarray(temp_chip).convert("L")
-    im.save("height_maps/{:d}.png".format(r_df))
-    print(r_df)
+
+if __name__ == '__main__':
+    for r_df in range(len(df_feature)):
+        temp_long = df_feature['Latitude'][r_df]
+        temp_lati = df_feature['Longitude'][r_df]
+        temp_chip = get_chip(padded_img=padded_img, test_lon=temp_long, test_lat=temp_lati, arr_dimension=chip_dimension)
+        im = Image.fromarray(temp_chip).convert("L")
+        im.save("height_maps/{:d}.png".format(r_df))
+        print(r_df)
