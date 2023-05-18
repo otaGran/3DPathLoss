@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from geopy import distance
 from pyproj import Transformer
 
 # from bokeh.io import output_notebook
@@ -8,33 +9,73 @@ from bokeh.plotting import figure, show, gmap
 from bokeh.models import ColumnDataSource, LogColorMapper, LinearColorMapper, HoverTool, GMapOptions
 import bokeh.palettes as palettes
 
+
+PCI_KEYS = [64, 65, 302]
+Tx_LAT, Tx_LONG = 55.784663, 12.523303
+# 55.784663, 12.516743
+Tx_HEIGHT, Rx_HEIGHT = 30, 1.5  # in meters
+
+
 # top left:
-Tx_25832_TL_x, Tx_25832_TL_y = 720000, 6189000
+coord_25832_TL_x, coord_25832_TL_y = 720000, 6189000
 # top right:
-Tx_25832_TR_x, Tx_25832_TR_y = 722000, 6189000
+coord_25832_TR_x, coord_25832_TR_y = 722000, 6189000
 # bottom right:
-Tx_25832_BR_x, Tx_25832_BR_y = 722000, 6187000
+coord_25832_BR_x, coord_25832_BR_y = 722000, 6187000
 # bottom left:
-Tx_25832_BL_x, Tx_25832_BL_y = 720000, 6187000
+coord_25832_BL_x, coord_25832_BL_y = 720000, 6187000
 
-from_EPSG = 25832
-to_EPSG = 4326
-transform_obj = Transformer.from_crs(from_EPSG, to_EPSG)  # transform from DTU coordinates to latitude, longitude
 
-x_len = 101
-y_len = 201
-x_arr = np.linspace(Tx_25832_TL_x, Tx_25832_TR_x, num=x_len)
-y_arr = np.linspace(Tx_25832_TL_y, Tx_25832_BL_y, num=y_len)
-latitude_arr = np.zeros(len(x_arr) * len(y_arr))
-longitude_arr = np.zeros(len(x_arr) * len(y_arr))
-displayed_val = np.zeros(len(x_arr) * len(y_arr))
-outer_idx = 0
+def write_feature_csv_grid(which_pci):
+    from_EPSG = 25832
+    to_EPSG = 4326
+    transform_obj = Transformer.from_crs(from_EPSG, to_EPSG)  # transform from DTU coordinates to latitude, longitude
 
-for iii, x in enumerate(x_arr):
-    for y in y_arr:
-        latitude_arr[outer_idx], longitude_arr[outer_idx] = transform_obj.transform(xx=x, yy=y)
-        outer_idx += 1
-    displayed_val[iii*len(x_arr):iii*len(x_arr)+len(x_arr)] = iii
-col_names = ['LONGITUDE', 'LATITUDE', 'VALUE']
-df = pd.DataFrame(list(zip(latitude_arr, longitude_arr, displayed_val)), columns=col_names)
+    x_len = 101
+    y_len = 201
+    x_arr = np.linspace(coord_25832_TL_x, coord_25832_TR_x, num=x_len)
+    y_arr = np.linspace(coord_25832_TL_y, coord_25832_BL_y, num=y_len)
 
+
+    latitude_arr = np.zeros(x_len * y_len)
+    longitude_arr = np.zeros(x_len * y_len)
+    Distance = np.zeros(x_len * y_len)
+    Distance_x = np.zeros(x_len * y_len)
+    Distance_y = np.zeros(x_len * y_len)
+    PCI = np.zeros(x_len * y_len)
+
+    outer_idx = 0
+
+    for iii, x in enumerate(x_arr):
+        for y in y_arr:
+            latitude_arr[outer_idx], longitude_arr[outer_idx] = transform_obj.transform(xx=x, yy=y)
+            two_D_dist = distance.distance((latitude_arr[outer_idx], longitude_arr[outer_idx]),
+                                           (Tx_LAT, Tx_LONG)).km
+            Distance[outer_idx] = np.sqrt(two_D_dist ** 2 + ((Tx_HEIGHT - Rx_HEIGHT) / 1000) ** 2)
+
+            # Distance_x is Rx_lat - Tx_lat, Distance_y is Rx_long - Tx_long: Thrane did it very weirdly
+            Distance_x[outer_idx], Distance_y[outer_idx] = latitude_arr[outer_idx] - Tx_LAT, longitude_arr[outer_idx] - Tx_LONG
+            PCI[outer_idx] = int(which_pci)
+
+            outer_idx += 1
+    length_df = len(longitude_arr)
+    PCI_name_list = ['PCI_{:d}'.format(k) for k in PCI_KEYS]
+    col_names = ['Longitude', 'Latitude', 'Speed', 'Distance', 'Distance_x', 'Distance_y', 'PCI']
+    col_names = col_names + PCI_name_list
+    df = pd.DataFrame(list(zip(longitude_arr, latitude_arr, np.zeros(length_df), Distance, Distance_x, Distance_y, PCI, np.zeros(length_df), np.zeros(length_df), np.zeros(length_df))), columns=col_names)
+    df['PCI_' + str(which_pci)] = np.ones(length_df)
+
+    csv_feature = open('grid_data' + '/feature_matrix_grid' + '.csv', 'w')
+    csv_feature.write(',Longitude,Latitude,Speed,Distance,Distance_x,Distance_y,PCI,' + ','.join(PCI_name_list) + '\n')
+    for i in range(len(df['PCI'])):
+        # print(type(feature_subset['PCI_' + str(3)]))
+        which_PCI = [str(int(df['PCI_' + str(int(key))][i])) for key in PCI_KEYS]
+        # print(which_PCI)
+        csv_feature.write('{x},{a},{b},{c},{d},{e},{f},{g},{lst}\n'.
+                          format(x=i, a=df['Longitude'][i], b=df['Latitude'][i],
+                                 c=df['Speed'][i], d=df['Distance'][i],
+                                 e=round(df['Distance_x'][i], 7),
+                                 f=round(df['Distance_y'][i], 7),
+                                 g=df['PCI'][i], lst=','.join(which_PCI)))
+
+write_feature_csv_grid(64)
