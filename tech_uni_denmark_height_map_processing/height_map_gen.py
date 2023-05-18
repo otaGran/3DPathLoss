@@ -16,6 +16,7 @@ Must have raw_data/feature_matrix.csv, height_maps/, DSM_6188_720_2x2/ (with TL,
 to the tiff files). 
 """
 
+
 def long_lat_to_arr_idx(long, lat, from_EPSG=4326, to_EPSG=25832):
     transform_obj = Transformer.from_crs(from_EPSG, to_EPSG)
     dest_x, dest_y = transform_obj.transform(long, lat)
@@ -63,6 +64,8 @@ def get_rotation_angle(long_centre, lat_centre):
 
 
 """Functions to rotate the image and rotate the receiver's location"""
+
+
 def rotate_img_about_antenna(img_arr, long_centre, lat_centre, scale=1.0, pad_frac=pad_fraction):
     """Rotates the image about the antenna."""
     # img_arr should be padded; long_centre, lat_centre are the longitude and latitude of the receiver. Rotate image such that the line connecting the user and transmitter is vertical.
@@ -70,6 +73,7 @@ def rotate_img_about_antenna(img_arr, long_centre, lat_centre, scale=1.0, pad_fr
     (h, w) = img_arr.shape[:2]
     rotated = cv2.warpAffine(img_arr, rot_matrix, (w, h))
     return rotated
+
 
 def rotate_point_about_antenna(long_centre, lat_centre, scale=1.0, pad_frac=pad_fraction, orig_img_shape=5000, rot_matrix=None):
     # orig_img_shape=5000 using im_arr.shape
@@ -83,6 +87,7 @@ def rotate_point_about_antenna(long_centre, lat_centre, scale=1.0, pad_frac=pad_
     (point[0], point[1]) = (point[1] + orig_img_shape * pad_frac, point[0] + orig_img_shape * pad_frac)
     # transforming the shifted (x,y) location using the rotation matrix, i.e. provides (col, row) indexing into padded img
     return np.matmul(rot_matrix, point.T)
+
 
 def get_rotation_mat(long_centre, lat_centre, scale=1.0, pad_frac=pad_fraction, orig_img_shape=5000):
     # long_centre, lat_centre: longitude and latitude of the receiver
@@ -126,7 +131,9 @@ im_arr_padded = np.pad(array=im_arr, pad_width=(int(rrr * pad_fraction), int(ccc
 # get_chip(padded_img=im_arr_padded, test_lon=0, test_lat=0, arr_dimension=chip_dimension)
 
 """NOTE: this code (mistakenly) flipped the names of all longitude and latitude pairs. 
-I thought (longitude, latitude) = (x,y), but the correct version is (latitude, longitude) = (x,y). """
+I thought that (longitude, latitude) = (x,y) are fed into maps, 
+but the correct version is (latitude, longitude) = (y,x) that should be fed into maps. I incorrectly thought 
+(longitude, latitude) = (x,y)."""
 
 df_feature = pd.read_csv('raw_data/feature_matrix.csv')
 for r_df in range(len(df_feature)):
