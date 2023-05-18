@@ -11,7 +11,8 @@ import itertools
 """
 
 __all__ = ['getData', 'getLocationDF', 'getSortedKeys', 'getConnectedIndices', 'timeSub', 'rescaleDB',
-           'getDukeNodeData']
+           'getDukeNodeData', 'get_BS_LOCATIONS_DICT', 'getData', 'writeData_formatted', 'dB_to_pow',
+           'pow_to_dB']
 
 OUT_OF_BOUNDS = -300
 
@@ -25,6 +26,11 @@ BS_LOCATIONS_DICT = {3: [36.002535, -78.937431, BS_ELEVATION], 4: [35.999245, -7
                      7: [36.002919, -78.935555, BS_ELEVATION], 20: [36.000000, -78.937000, BS_ELEVATION],
                      40: [36.002009, -78.940000, BS_ELEVATION],
                      184: [35.998999, -78.940770, BS_ELEVATION], 237: [36.003000, -78.940023, BS_ELEVATION]}
+
+
+def get_BS_LOCATIONS_DICT():
+    return BS_LOCATIONS_DICT
+
 
 '''
     Gets data collected only from our CBRS node (pci: 40 or 20). Returns data structure of same format
@@ -186,7 +192,7 @@ def getData(directory):
             'cell_info': {'pci': [], 'ss': [], 'rsrp': [], 'rsrq': [], 'sinr': [], 'band': [], 'freq': []},
             'time_stamp': [], 'date': []}
     lst = sorted(os.listdir(directory))
-    print(len(data))
+    # print(len(data))
     for i, f in enumerate(lst):
         new_data = json.load(open(directory + '/' + f))
 
@@ -242,7 +248,7 @@ def getData(directory):
         data['location']['latitude'][i], data['location']['longitude'][i])).meters ** 2 + (
                                                          BS_LOCATIONS_DICT[pci][2] - data['location']['altitude'][
                                                      i]) ** 2) for pci in data['cell_info']['pci'][i]]]
-    print(len(data))
+    # print(len(data))
     return data
 
 
@@ -252,9 +258,10 @@ def getData(directory):
 '''
 
 
-def writeData_formatted(data, dest_dir, date):
-    csv_feature = open(dest_dir + '/feature_matrix_' + date + '.csv', 'w')
-    csv_output = open(dest_dir + '/output_matrix_' + date + '.csv', 'w')
+def writeData_formatted(data, dest_dir, date, write='y'):
+    if write == 'y':
+        csv_feature = open(dest_dir + '/feature_matrix_' + date + '.csv', 'w')
+        csv_output = open(dest_dir + '/output_matrix_' + date + '.csv', 'w')
     data_copy = data.copy()
     # note: in the data_subset dict, Longitude comes before Latitude; this is to satisfy the ordering of the feature_matrix
     # , Longitude, Latitude, Speed, Distance, Distance_x, Distance_y, PCI, PCI_64, PCI_65, PCI_302
@@ -316,33 +323,40 @@ def writeData_formatted(data, dest_dir, date):
                          Power=np.array(list(itertools.chain.from_iterable(data_copy['cell_info']['ss']))))
 
     PCI_name_list = ['PCI_{:d}'.format(k) for k in BS_LOCATIONS_DICT.keys()]
-    csv_feature.write(',Longitude,Latitude,Speed,Distance,Distance_x,Distance_y,PCI,' + ','.join(PCI_name_list) + '\n')
-    csv_output.write(',SINR,RSRP,RSRQ,Power\n')
-    for i in range(len(feature_subset['id'])):
-        # print(type(feature_subset['PCI_' + str(3)]))
-        which_PCI = [str(int(feature_subset['PCI_' + str(int(key))][i])) for key in BS_LOCATIONS_DICT_keys]
-        # print(which_PCI)
-        csv_feature.write('{x},{a},{b},{c},{d},{e},{f},{g},{lst}\n'.
-                          format(x=i, a=feature_subset['Longitude'][i], b=feature_subset['Latitude'][i],
-                                 c=feature_subset['Speed'][i], d=feature_subset['Distance'][i],
-                                 e=round(feature_subset['Distance_x'][i], 7), f=round(feature_subset['Distance_y'][i], 7),
-                                 g=feature_subset['PCI'][i], lst=','.join(which_PCI)))
-        csv_output.write('{x},{a},{b},{c},{d}\n'.
-                         format(x=i, a=round(output_subset['SINR'][i], 7), b=round(output_subset['RSRP'][i], 7),
-                                c=round(output_subset['RSRQ'][i], 7), d=round(output_subset['Power'][i], 7)))
+    if write == 'y':
+        csv_feature.write(',Longitude,Latitude,Speed,Distance,Distance_x,Distance_y,PCI,' + ','.join(PCI_name_list) + '\n')
+        csv_output.write(',SINR,RSRP,RSRQ,Power\n')
+        for i in range(len(feature_subset['id'])):
+            # print(type(feature_subset['PCI_' + str(3)]))
+            which_PCI = [str(int(feature_subset['PCI_' + str(int(key))][i])) for key in BS_LOCATIONS_DICT_keys]
+            # print(which_PCI)
+            csv_feature.write('{x},{a},{b},{c},{d},{e},{f},{g},{lst}\n'.
+                              format(x=i, a=feature_subset['Longitude'][i], b=feature_subset['Latitude'][i],
+                                     c=feature_subset['Speed'][i], d=feature_subset['Distance'][i],
+                                     e=round(feature_subset['Distance_x'][i], 7), f=round(feature_subset['Distance_y'][i], 7),
+                                     g=feature_subset['PCI'][i], lst=','.join(which_PCI)))
+            csv_output.write('{x},{a},{b},{c},{d}\n'.
+                             format(x=i, a=round(output_subset['SINR'][i], 7), b=round(output_subset['RSRP'][i], 7),
+                                    c=round(output_subset['RSRQ'][i], 7), d=round(output_subset['Power'][i], 7)))
 
     return feature_subset, output_subset
 
 
-direc = '../data/data_05_08_23'
-dat = getData(direc)
-date_global = '05_08_23'
-# print(dat['location_wrt_BS']['d_latitude'])
-dest_name = '../formatted_data'
-# for i in range(len(dat['location_wrt_BS']['d_longitude'])):
-#     print(len(dat['location_wrt_BS']['d_longitude'][i]) - len(dat['distances_to_BS'][i]))
-# print(dat['cell_info']['sinr'])
+def main():
+    direc = '../data/data_05_08_23'
+    dat = getData(direc)
+    date_global = '05_08_23'
+    # print(dat['location_wrt_BS']['d_latitude'])
+    dest_name = '../formatted_data'
+    # for i in range(len(dat['location_wrt_BS']['d_longitude'])):
+    #     print(len(dat['location_wrt_BS']['d_longitude'][i]) - len(dat['distances_to_BS'][i]))
+    # print(dat['cell_info']['sinr'])
 
-# print(len(writeData_formatted(dat, dest_dir=None, date=None)['Longitude']) - len(writeData_formatted(dat, dest_dir=None, date=None)['Distance_y']))
-# print(all(writeData_formatted(dat, dest_dir=None, date=None)['Longitude'] == 0))
-writeData_formatted(dat, dest_dir=dest_name, date=date_global)
+    # print(len(writeData_formatted(dat, dest_dir=None, date=None)['Longitude']) - len(writeData_formatted(dat, dest_dir=None, date=None)['Distance_y']))
+    # print(all(writeData_formatted(dat, dest_dir=None, date=None)['Longitude'] == 0))
+    writeData_formatted(dat, dest_dir=dest_name, date=date_global)
+    return
+
+
+if __name__ == '__main__':
+    main()
