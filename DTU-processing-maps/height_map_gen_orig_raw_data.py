@@ -14,6 +14,8 @@ Link for the data: https://dataforsyningen.dk/data/928
 Download from DENMARK'S HEIGHT MODEL - SURFACE (10 km blocks)
 Must have height_maps/, DSM_6188_720_2x2/ (with TL, TR, BL, BR added as suffixes 
 to the tiff files). raw_data folder can be in one directory above.
+
+This code uses the raw data inside ../raw_data (i.e., latitude and longitude pairs given in Thrane's paper). 
 """
 
 
@@ -135,10 +137,10 @@ I thought that (longitude, latitude) = (x,y) are fed into maps,
 but the correct version is (latitude, longitude) = (y,x) that should be fed into maps. I incorrectly thought 
 (longitude, latitude) = (x,y)."""
 
-padded_img = combine_height_maps(pad_fraction=0.2)
-df_feature = pd.read_csv('../raw_data/feature_matrix.csv')
 
 if __name__ == '__main__':
+    padded_img = combine_height_maps(pad_fraction=0.2)
+    df_feature = pd.read_csv('../raw_data/feature_matrix.csv')
     for r_df in range(len(df_feature)):
         temp_long = df_feature['Latitude'][r_df]
         temp_lati = df_feature['Longitude'][r_df]
