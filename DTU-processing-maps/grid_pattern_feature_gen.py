@@ -71,7 +71,7 @@ def write_feature_csv_grid(which_pci, x_len, y_len):
         # print(which_PCI)
         csv_feature.write('{x},{a},{b},{c},{d},{e},{f},{g},{lst}\n'.
                           format(x=i, a=df['Longitude'][i], b=df['Latitude'][i],
-                                 c=df['Speed'][i], d=df['Distance'][i],
+                                 c=df['Speed'][i], d=round(df['Distance'][i], 10),
                                  e=round(df['Distance_x'][i], 7),
                                  f=round(df['Distance_y'][i], 7),
                                  g=df['PCI'][i], lst=','.join(which_PCI)))
