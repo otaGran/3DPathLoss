@@ -55,17 +55,37 @@ def write_feature_csv_grid(directory, which_pci, lat_len, long_len):
     df = pd.DataFrame(list(zip(longitude_arr, latitude_arr, np.zeros(length_df), Distance, Distance_x, Distance_y, PCI, *PCI_i_list)), columns=col_names)
     df['PCI_' + str(which_pci)] = np.ones(length_df)
 
-    csv_feature = open(directory + 'feature_matrix_grid' + '.csv', 'w')
+    csv_feature = open(directory + 'feature_matrix_grid_' + 'PCI{:d}'.format(which_pci) + '.csv', 'w')
     csv_feature.write(',Longitude,Latitude,Speed,Distance,Distance_x,Distance_y,PCI,' + ','.join(PCI_name_list) + '\n')
     for i in range(len(df['PCI'])):
         which_PCI = [str(int(df['PCI_' + str(int(key))][i])) for key in BS_LOCATIONS_DICT.keys()]
         csv_feature.write('{x},{a},{b},{c},{d},{e},{f},{g},{lst}\n'.
-                          format(x=i, a=df['Longitude'][i], b=df['Latitude'][i],
-                                 c=df['Speed'][i], d=round(df['Distance'][i], 10),
+                          format(x=i,
+                                 a=df['Longitude'][i],
+                                 b=df['Latitude'][i],
+                                 c=df['Speed'][i],
+                                 d=round(df['Distance'][i], 10),
                                  e=round(df['Distance_x'][i], 7),
                                  f=round(df['Distance_y'][i], 7),
                                  g=df['PCI'][i], lst=','.join(which_PCI)))
     return
+
+
+def getData_from_csv(f_name):
+    df = pd.read_csv(f_name)
+    total_len = len(df['Latitude'])
+    feature_dict = dict(id=np.linspace(start=0, stop=total_len - 1, num=total_len, endpoint=True),
+                        Speed=np.zeros(total_len),
+                        Longitude=df['Longitude'],
+                        Latitude=df['Latitude'],
+                        Distance=df['Distance'],
+                        Distance_x=df['Distance_x'],
+                        Distance_y=df['Distance_y'],
+                        PCI=df['PCI'])
+    PCI_KEYS = BS_LOCATIONS_DICT.keys()
+    for key in PCI_KEYS:
+        feature_dict['PCI_' + str(key)] = df['PCI_' + str(key)]
+    return feature_dict
 
 
 if __name__ == '__main__':
