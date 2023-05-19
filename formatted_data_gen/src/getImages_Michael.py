@@ -154,7 +154,7 @@ def main():
     dat = getData(direc)
     cropped_chip_size = 256
     features, _ = writeData_formatted(dat, dest_dir=None, date=None, write='n')
-    get_Img_all(data_formatted=features, directory='../formatted_data/map_api', mapbox_tile_set_ID=mapbox_tile_ID,
+    get_Img_all(data_formatted=features, directory='../formatted_data/grid_map_api', mapbox_tile_set_ID=mapbox_tile_ID,
                 cropped_size=cropped_chip_size, pad_frac=pad_fraction_, zoom_level=zoom_level_)
 
 

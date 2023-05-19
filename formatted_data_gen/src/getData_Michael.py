@@ -14,13 +14,13 @@ import itertools
 
 __all__ = ['getData', 'getLocationDF', 'getSortedKeys', 'getConnectedIndices', 'timeSub', 'rescaleDB',
            'getDukeNodeData', 'get_BS_LOCATIONS_DICT', 'getData', 'writeData_formatted', 'dB_to_pow',
-           'pow_to_dB']
+           'pow_to_dB', 'BS_ELEVATION']
 
 OUT_OF_BOUNDS = -300
 
 """
     These are not the actual locations/heights of base stations. [latitude, longitude]. These are PLACEHOLDER values. 
-    When adding/removing keys from BS_LOCATIONS_DICT, must 
+    # When adding/removing keys from BS_LOCATIONS_DICT, must 
 """
 BS_ELEVATION = 300
 BS_LOCATIONS_DICT = {3: [36.002535, -78.937431, BS_ELEVATION], 4: [35.999245, -78.939770, BS_ELEVATION],
@@ -297,25 +297,20 @@ def writeData_formatted(data, dest_dir, date, write='y'):
                           Distance=np.array(list(itertools.chain.from_iterable(data_copy['distances_to_BS']))),
                           Distance_x=np.array(list(itertools.chain.from_iterable(data_copy['location_wrt_BS']['d_latitude']))),
                           Distance_y=np.array(list(itertools.chain.from_iterable(data_copy['location_wrt_BS']['d_longitude']))),
-                          PCI=np.array(list(itertools.chain.from_iterable(data_copy['cell_info']['pci']))),
-                          PCI_3=np.zeros(total_len),
-                          PCI_4=np.zeros(total_len),
-                          PCI_6=np.zeros(total_len),
-                          PCI_7=np.zeros(total_len),
-                          PCI_20=np.zeros(total_len),
-                          PCI_40=np.zeros(total_len),
-                          PCI_184=np.zeros(total_len),
-                          PCI_237=np.zeros(total_len)
+                          PCI=np.array(list(itertools.chain.from_iterable(data_copy['cell_info']['pci'])))
                           )
+    BS_LOCATIONS_DICT_keys = sorted(list(BS_LOCATIONS_DICT.keys()))
+    for PCI_key in BS_LOCATIONS_DICT_keys:
+        feature_subset['PCI_' + str(PCI_key)] = np.zeros(total_len)
+
+    feature_PCI_keys = sorted(list(feature_subset.keys())[8:])  # this line must be placed after feature_subset has been constructed
+
     outer = 0
     for orig_idx, sig in enumerate(data_copy['cell_info']['ss']):
         for sig_iter in range(len(sig)):
             feature_subset['Longitude'][outer], feature_subset['Latitude'][outer] = data_copy['location']['longitude'][orig_idx], data_copy['location']['latitude'][orig_idx]
             feature_subset['PCI_' + str(int(feature_subset['PCI'][outer]))][outer] = 1
             outer += 1
-    BS_LOCATIONS_DICT_keys = sorted(list(BS_LOCATIONS_DICT.keys()))
-    # print(list(feature_subset.keys()))
-    feature_PCI_keys = sorted(list(feature_subset.keys())[8:])
     if feature_PCI_keys != sorted(list(['PCI_{:d}'.format(k) for k in BS_LOCATIONS_DICT_keys])):
         print('WARNING by writeData_formatted: there are missing/extra PCI features in feature_subset. '
               'Ensure that the keys of BS_LOCATIONS_DICT match the PCI keys in feature_subset. ')
@@ -333,9 +328,12 @@ def writeData_formatted(data, dest_dir, date, write='y'):
             which_PCI = [str(int(feature_subset['PCI_' + str(int(key))][i])) for key in BS_LOCATIONS_DICT_keys]
             # print(which_PCI)
             csv_feature.write('{x},{a},{b},{c},{d},{e},{f},{g},{lst}\n'.
-                              format(x=i, a=feature_subset['Longitude'][i], b=feature_subset['Latitude'][i],
-                                     c=feature_subset['Speed'][i], d=feature_subset['Distance'][i],
-                                     e=round(feature_subset['Distance_x'][i], 7), f=round(feature_subset['Distance_y'][i], 7),
+                              format(x=i, a=feature_subset['Longitude'][i],
+                                     b=feature_subset['Latitude'][i],
+                                     c=feature_subset['Speed'][i],
+                                     d=round(feature_subset['Distance'][i], 10),
+                                     e=round(feature_subset['Distance_x'][i], 7),
+                                     f=round(feature_subset['Distance_y'][i], 7),
                                      g=feature_subset['PCI'][i], lst=','.join(which_PCI)))
             csv_output.write('{x},{a},{b},{c},{d}\n'.
                              format(x=i, a=round(output_subset['SINR'][i], 7), b=round(output_subset['RSRP'][i], 7),
