@@ -135,7 +135,10 @@ def combine_height_maps(pad_fraction):
 """NOTE: this code (mistakenly) flipped the names of all longitude and latitude pairs. 
 I thought that (longitude, latitude) = (x,y) are fed into maps, 
 but the correct version is (latitude, longitude) = (y,x) that should be fed into maps. I incorrectly thought 
-(longitude, latitude) = (x,y)."""
+(longitude, latitude) = (x,y).
+
+So, as a remedy, use test_lon=latitude and test_lat=longitude when running get_chip
+"""
 
 
 if __name__ == '__main__':
