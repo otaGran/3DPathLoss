@@ -102,7 +102,8 @@ def get_rotation_mat(lat_Rx, long_Rx, lat_Tx, long_Tx, pad_frac, zoom_level, ori
 def get_Img_all(data_formatted, directory, mapbox_tile_set_ID, cropped_size, pad_frac, zoom_level):
     """
     This saves all satellite images whose centres are specified by (latitude, longitude) pairs in data_formatted
-    :param data_formatted: formatted data, output of
+    :param data_formatted: formatted data, output of writeData_formatted (or as a dict in
+    grid_data_feature_matrix_Duke.getData_from_csv)
     :param directory: in which to store the satellite image chips
     :param mapbox_tile_set_ID: for folium, should be 'mapbox.satellite'
     :param cropped_size: should be 256. Size of the square satellite image chips
@@ -154,7 +155,7 @@ def main():
     dat = getData(direc)
     cropped_chip_size = 256
     features, _ = writeData_formatted(dat, dest_dir=None, date=None, write='n')
-    get_Img_all(data_formatted=features, directory='../formatted_data/grid_map_api', mapbox_tile_set_ID=mapbox_tile_ID,
+    get_Img_all(data_formatted=features, directory='../formatted_data/map_api', mapbox_tile_set_ID=mapbox_tile_ID,
                 cropped_size=cropped_chip_size, pad_frac=pad_fraction_, zoom_level=zoom_level_)
 
 

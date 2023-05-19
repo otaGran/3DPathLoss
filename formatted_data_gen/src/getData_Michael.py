@@ -291,7 +291,7 @@ def writeData_formatted(data, dest_dir, date, write='y'):
 
     # Assume that Distance_x is \Delta(longitude), Distance_y is \Delta(latitude).
     feature_subset = dict(id=np.linspace(start=0, stop=total_len - 1, num=total_len, endpoint=True),
-                          Speed=np.ones(total_len) * OUT_OF_BOUNDS,
+                          Speed=np.zeros(total_len),
                           Longitude=np.zeros(total_len),
                           Latitude=np.zeros(total_len),
                           Distance=np.array(list(itertools.chain.from_iterable(data_copy['distances_to_BS']))),
