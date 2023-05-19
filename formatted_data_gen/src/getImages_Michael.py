@@ -15,6 +15,12 @@ import cv2
 
 from getData_Michael import get_BS_LOCATIONS_DICT, getData, writeData_formatted
 
+"""
+    This code is based on height_map_gen.py in DTU-processing-maps. Written by Michael Li. 
+
+    This code formats satellite images (using Duke's data) in the same way as in Thrane's paper. 
+"""
+
 
 R_EARTH = 6378137
 CIRCUMFERENCE = 2 * np.pi * R_EARTH  # circumference of earth

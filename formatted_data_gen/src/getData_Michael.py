@@ -8,6 +8,8 @@ import itertools
 
 """
     This code is based on SigCap_colormap.ipynb. Written by Michael Li. 
+    
+    This code formats SigCap data into the same form of csv file as provided by Thrane's raw data. 
 """
 
 __all__ = ['getData', 'getLocationDF', 'getSortedKeys', 'getConnectedIndices', 'timeSub', 'rescaleDB',
