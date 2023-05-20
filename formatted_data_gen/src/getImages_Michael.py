@@ -15,12 +15,6 @@ import cv2
 
 from getData_Michael import get_BS_LOCATIONS_DICT, getData, writeData_formatted
 
-"""
-    This code is based on height_map_gen.py in DTU-processing-maps. Written by Michael Li. 
-
-    This code formats satellite images (using Duke's data) in the same way as in Thrane's paper. 
-"""
-
 
 R_EARTH = 6378137
 CIRCUMFERENCE = 2 * np.pi * R_EARTH  # circumference of earth
@@ -81,10 +75,12 @@ def rotate_point_about_antenna(lat_Rx, long_Rx, lat_Tx, long_Tx, pad_frac, zoom_
         rot_matrix = get_rotation_mat(lat_Rx, long_Rx, lat_Tx, long_Tx, scale=scale, zoom_level=zoom_level,
                                       orig_img_shape=orig_img_shape, pad_frac=pad_frac)
     point = np.ones(3)
+    # long_lat_to_arr_idx returns the array index, hence we need to transform the indices
     (point[0], point[1]) = (orig_img_shape[1] / 2 + orig_img_shape[1] * pad_frac,
                             orig_img_shape[0] / 2 + orig_img_shape[0] * pad_frac)
     # swapping to (x,y) for rotation
     # transforming the shifted (x,y) location using the rotation matrix, i.e. provides (col, row) indexing into padded img
+    # print(np.matmul(rot_matrix, point.T)[-1], np.matmul(rot_matrix, point.T)[0])
     return np.matmul(rot_matrix, point.T)[::-1]
 
 
@@ -102,8 +98,7 @@ def get_rotation_mat(lat_Rx, long_Rx, lat_Tx, long_Tx, pad_frac, zoom_level, ori
 def get_Img_all(data_formatted, directory, mapbox_tile_set_ID, cropped_size, pad_frac, zoom_level):
     """
     This saves all satellite images whose centres are specified by (latitude, longitude) pairs in data_formatted
-    :param data_formatted: formatted data, output of writeData_formatted (or as a dict in
-    grid_data_feature_matrix_Duke.getData_from_csv)
+    :param data_formatted: formatted data, output of
     :param directory: in which to store the satellite image chips
     :param mapbox_tile_set_ID: for folium, should be 'mapbox.satellite'
     :param cropped_size: should be 256. Size of the square satellite image chips
