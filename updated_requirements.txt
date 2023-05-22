@@ -1,0 +1,15 @@
+h5py
+Shapely==1.8.4
+pandas==1.5.3
+geopandas==0.12.1
+matplotlib
+descartes
+
+
+torch
+scikit-learn
+torchvision
+scikit-image
+tikzplotlib
+experimentlogger-jathr
+tqdm
