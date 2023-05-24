@@ -27,11 +27,11 @@ hant_sectoria = design(sectoria, freq);
 
 tx = txsite("Latitude",Tx_LAT, "Longitude",Tx_LONG, ...
      "TransmitterFrequency",freq, 'AntennaHeight',30, ...
-     'Antenna',hant_sectoria, 'AntennaAngle', -45);
+     'Antenna',hant_sectoria, 'AntennaAngle', -45, 'TransmitterPower',4);
 
 pm = propagationModel('raytracing', 'MaxNumReflections',5, 'MaxNumDiffractions',1, ...
     'AngularSeparation', 'low', ...
-    'MaxRelativePathLoss', 35);
+    'MaxRelativePathLoss', 45);
 %% calculate sig strength given rx location
 every_nth = 20;
 lat_arr_short = lat_arr(1:every_nth:end);
@@ -43,7 +43,11 @@ parfor iii=1:length(long_arr_short)
     rx = rxsite("Latitude",lat_arr(iii), "Longitude",long_arr(iii), "AntennaHeight",1.5);
     power_raytrace_arr(iii) = sigstrength(rx,tx,pm);
 end
-
+%%
+doc(:, 1) = long_arr_short;
+doc(:, 2) = lat_arr_short;
+doc(:, 3) = power_raytrace_arr;
+writematrix(doc, 'DTU_raytrace_', 'FileType','text', 'Delimiter',',')
 %% calculate rmse with offset
 offset_arr = linspace(-50, 0, 101);
 rmse_arr = zeros(1, length(offset_arr));

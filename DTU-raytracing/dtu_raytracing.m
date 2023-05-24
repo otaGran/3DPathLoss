@@ -18,13 +18,16 @@ pattern(sectoria, freq)
 hant_sectoria = design(sectoria, freq);
 %% display coverage (half-wave dipole)
 viewer = siteviewer('Buildings', 'dtu.osm');
+
+
 % tx = txsite("Latitude",Tx_LAT, "Longitude",Tx_LONG, ...
 %     "TransmitterFrequency",freq, 'AntennaHeight',30, 'Antenna',hant);
 
 tx = txsite("Latitude",Tx_LAT, "Longitude",Tx_LONG, ...
-     "TransmitterFrequency",freq, 'AntennaHeight',30, 'Antenna',hant_sectoria, 'AntennaAngle', -45);
-show(tx)
-pattern(tx)
+     "TransmitterFrequency",freq, 'AntennaHeight',30, 'Antenna',hant_sectoria, 'AntennaAngle', -45, ...
+     'TransmitterPower',5);
+show(tx)  % show tx on viewer
+pattern(tx)  % show gain of
 
 %%
 pm = propagationModel('raytracing', 'MaxNumReflections',2, 'MaxNumDIffractions',1);
