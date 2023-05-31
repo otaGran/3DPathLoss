@@ -1,3 +1,4 @@
+%% this script calculates the RMSE between raytracing data and real measurements
 %% setting constants
 freq = 811 * 10^6;  % Tx freq 
 lambda = 3 * 10^8 / freq;  % wavelength
@@ -17,51 +18,74 @@ power_empirical_arr = df_output_only_65(:, end);
 
 %% setting up viewer for DTU
 viewer = siteviewer('Buildings', 'dtu.osm');
-
 %% antenna, tx and propagation model
 sectoria = sectorInvertedAmos('ArmLength',0.5.*[0.0880 0.0710 0.0730 0.0650], ...
-    'GroundPlaneWidth', 0.15, 'GroundPlaneLength', 1);
+    'GroundPlaneWidth', 0.15, 'GroundPlaneLength', 1, Tilt=0, TiltAxis=[0 1 0]);
 
 % pattern(sectoria, freq)
 hant_sectoria = design(sectoria, freq);
-
+transmit_power = 4;
 tx = txsite("Latitude",Tx_LAT, "Longitude",Tx_LONG, ...
-     "TransmitterFrequency",freq, 'AntennaHeight',30, ...
-     'Antenna',hant_sectoria, 'AntennaAngle', -45, 'TransmitterPower',4);
+     "TransmitterFrequency",freq, 'AntennaHeight',1.5, ...
+     'Antenna',hant_sectoria, 'AntennaAngle',-45, 'TransmitterPower',transmit_power);
 
-pm = propagationModel('raytracing', 'MaxNumReflections',5, 'MaxNumDiffractions',1, ...
-    'AngularSeparation', 'low', ...
-    'MaxRelativePathLoss', 45);
+pm = propagationModel('raytracing', 'MaxNumReflections',5, 'MaxNumDiffractions',0, ...
+    'AngularSeparation', 'medium', ...
+    'MaxRelativePathLoss',40, 'BuildingsMaterial','concrete', ...
+    'TerrainMaterial','loam');
+% pattern(tx)
 %% calculate sig strength given rx location
-every_nth = 20;
+every_nth = 100;
 lat_arr_short = lat_arr(1:every_nth:end);
 long_arr_short = long_arr(1:every_nth:end);
 power_empirical_arr_short = power_empirical_arr(1:every_nth:end);
-
+%%
 power_raytrace_arr = zeros(length(long_arr_short), 1);
 parfor iii=1:length(long_arr_short)
-    rx = rxsite("Latitude",lat_arr(iii), "Longitude",long_arr(iii), "AntennaHeight",1.5);
+    rx = rxsite("Latitude",lat_arr_short(iii), "Longitude",long_arr_short(iii), "AntennaHeight",1.5);
     power_raytrace_arr(iii) = sigstrength(rx,tx,pm);
 end
-%%
+
+%% save raytracing sig strength
+
 doc(:, 1) = long_arr_short;
 doc(:, 2) = lat_arr_short;
 doc(:, 3) = power_raytrace_arr;
-writematrix(doc, 'DTU_raytrace_', 'FileType','text', 'Delimiter',',')
-%% calculate rmse with offset
-offset_arr = linspace(-50, 0, 101);
-rmse_arr = zeros(1, length(offset_arr));
-for iii=1:length(offset_arr)
-    rmse_arr(iii) = rmse_empirical_raytracing(power_empirical_arr_short, ...
-        power_raytrace_arr, offset_arr(iii));
+fname = sprintf('DTU_raytrace_pow%d_sigma%.4f_medAngSep.txt', transmit_power, 0.0275);
+fopen(fname,'w');
+writelines('Longitude,Latitude,Power', fname, WriteMode='append')
+for iii=1:length(doc(:, 1))
+    writelines(sprintf('%.6f,%.6f,%.8f',doc(iii,1),doc(iii,2),doc(iii,3)),fname, WriteMode='append')
 end
-[m, idx] = min(rmse_arr);
-sprintf('smallest rmse %.5f occurs at offset %.2f', m, offset_arr(cast(idx, 'uint16')))
 
-plot(offset_arr, rmse_arr, '--o')
-%% save raytracing sig strength
+% %%
+% bbb = readmatrix("DTU_raytrace_pow4_sigma0.0275.txt");
+% lat_arr_short = bbb(:, 2);
+% long_arr_short = bbb(:, 1);
+% power_raytrace_arr = bbb(:, 3);
+% 
+% %% delete inf values
+% lat_arr_short = lat_arr_short(~isinf(power_raytrace_arr));
+% long_arr_short = long_arr_short(~isinf(power_raytrace_arr));
+% power_empirical_arr_short = power_empirical_arr_short(~isinf(power_raytrace_arr));
+% power_raytrace_arr = power_raytrace_arr(~isinf(power_raytrace_arr));
+% 
+% %%
+% 
+% offset_arr = linspace(0, 50, 101);
+% rmse_arr = zeros(1, length(offset_arr));
+% for iii=1:length(offset_arr)
+%     rmse_arr(iii) = rmse_empirical_raytracing(power_empirical_arr_short, ...
+%         power_raytrace_arr, offset_arr(iii)); 
+% end
+% [m, idx] = min(rmse_arr);
+% sprintf('smallest rmse %.5f occurs at offset %.2f', m, offset_arr(cast(idx, 'uint16')))
+% figure; clf
+% hold on
+% plot(offset_arr, rmse_arr, '--o')
+% xlabel('offset'); ylabel('rmse');
 
 
 function [x] = rmse_empirical_raytracing(empirical, predicted, offset)
-    x = sqrt(sum((predicted + offset - empirical).^2) / length(empirical));
+    x = sqrt(sum((empirical + offset - predicted).^2) / length(empirical));
 end

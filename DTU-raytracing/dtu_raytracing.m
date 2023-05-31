@@ -1,10 +1,11 @@
+%% this script plots the coverage of the antenna. 
 freq = 811 * 10^6;  % Tx freq 
 lambda = 3 * 10^8 / freq;  % wavelength
 Tx_LAT = 55.784663;
 Tx_LONG = 12.523303;
 %% setting up antenna (half-wave dipole)
 n = 1;  % how many half-wavelengths the antenna is
-antenna_length = lambda / 2 * n
+antenna_length = lambda / 2 * n;
 antenna_width = 0.03;  % default antenna width
 dip = dipole('Length',antenna_length, 'Width',antenna_width, 'Tilt',[0, -60], ...
     'TiltAxis',[0 1 0; 0 0 1]);  % design antenna with appropriate tilt
@@ -19,12 +20,12 @@ hant_sectoria = design(sectoria, freq);
 %% display coverage (half-wave dipole)
 viewer = siteviewer('Buildings', 'dtu.osm');
 
-
+%%
 % tx = txsite("Latitude",Tx_LAT, "Longitude",Tx_LONG, ...
 %     "TransmitterFrequency",freq, 'AntennaHeight',30, 'Antenna',hant);
 
 tx = txsite("Latitude",Tx_LAT, "Longitude",Tx_LONG, ...
-     "TransmitterFrequency",freq, 'AntennaHeight',30, 'Antenna',hant_sectoria, 'AntennaAngle', -45, ...
+     "TransmitterFrequency",freq, 'AntennaHeight',1.5, 'Antenna',hant_sectoria, 'AntennaAngle', -45, ...
      'TransmitterPower',5);
 show(tx)  % show tx on viewer
 pattern(tx)  % show gain of
