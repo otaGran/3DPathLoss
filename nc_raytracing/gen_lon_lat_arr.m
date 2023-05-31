@@ -3,6 +3,8 @@ dir_name = 'test_dir';
 list_dir = dir(strcat(dir_name, '/*.osm'));
 bounds_cell = cell(1, length(list_dir));
 res = 256;
+
+%% this section generates the lat, lon arrays
 % lat_arr_outer = zeros(1, res*length(list_dir));
 % lon_arr_outer = zeros(1, res*length(list_dir));
 % names_list = strings(1, length(list_dir));
@@ -59,12 +61,11 @@ for fileIdx=1:length(f_names)
 
     for lonIdx=1:res
         power_raytrace_arr = zeros(1, res*res);
-        ppm = ParforProgMon('Example',res);
         parfor latIdx=1:res
             rx = rxsite("Latitude",lat_arr_outer((fileIdx-1)*res+lonIdx), "Longitude",lon_arr_outer((fileIdx-1)*res+latIdx), "AntennaHeight",1.5);
             power_raytrace_arr(latIdx) = sigstrength(rx,tx,pm);
         end
-        iii = iii + 1
+        parfor_progress(0);
         power_raytrace_outer((fileIdx-1)*res*res+1:fileIdx*res*res) = power_raytrace_arr;
     end
 end
