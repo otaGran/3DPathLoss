@@ -1,5 +1,29 @@
 import bpy
 
+# these are necessary for install_package(package_name)
+import subprocess
+import sys
+import os
+
+from PIL import Image
+import numpy as np
+
+
+def install_package(package_name):
+
+    # path to python.exe
+    python_exe = os.path.join(sys.prefix, 'bin', 'python.exe')
+     
+    # upgrade pip
+    subprocess.call([python_exe, "-m", "ensurepip"])
+    subprocess.call([python_exe, "-m", "pip", "install", "--upgrade", "pip"])
+     
+    # install required packages
+    subprocess.call([python_exe, "-m", "pip", "install", package_name])
+
+    print("DONE")
+    return
+
 
 def delete_all_in_collection():
     bpy.ops.object.select_all(action='SELECT')
@@ -14,6 +38,8 @@ def delete_all_in_collection():
 
 
 def add_osm(maxLon, minLon, maxLat, minLat):
+    bpy.data.scenes['Scene'].blosm.dataType = 'osm'
+    
     bpy.data.scenes['Scene'].blosm.maxLon = maxLon
     bpy.data.scenes['Scene'].blosm.minLon = minLon
 
@@ -40,11 +66,38 @@ def add_osm(maxLon, minLon, maxLat, minLat):
     return
 
 
+def add_terrain(material_name, maxLon, minLon, maxLat, minLat):
+    # toggle to 'terrain' import mode
+    bpy.data.scenes['Scene'].blosm.dataType = 'terrain'
+    
+    # ensure correct settings
+    bpy.data.scenes['Scene'].blosm.ignoreGeoreferencing = False
+    
+    # set bounds of import
+    bpy.data.scenes['Scene'].blosm.maxLon = maxLon
+    bpy.data.scenes['Scene'].blosm.minLon = minLon
+
+    bpy.data.scenes['Scene'].blosm.maxLat = maxLat
+    bpy.data.scenes['Scene'].blosm.minLat = minLat
+    
+    # import
+    bpy.ops.blosm.import_data()
+    
+    # set properties
+    terrain_obj = bpy.data.objects['Terrain']
+    mat = bpy.data.materials.get(material_name)
+    
+    if mat is None:
+        mat = bpy.data.materials.new(name=material_name)
+    terrain_obj.data.materials.append(mat)
+    return
+
+
 def add_plane(material_name, size=1100):
     bpy.ops.mesh.primitive_plane_add(size=size)
 
     plane_obj = bpy.data.objects['Plane']
-    mat = bpy.data.materials.get('itu_concrete')
+    mat = bpy.data.materials.get(material_name)
     
     if mat is None:
         # create material
@@ -68,19 +121,61 @@ def change_material_names(wall_name, roof_name, f_path):
         print("there's only one object (a plane) in this Scene Collection")
 
     # export
-    bpy.ops.export_scene.mitsuba(filepath='/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_xml_files/duke_new/duke_new.xml', axis_forward='Y', axis_up='Z')
+    bpy.ops.export_scene.mitsuba(filepath=f_path, axis_forward='Y', axis_up='Z')
     return
 
 
-delete_all_in_collection()
+def terrain_to_png(terrain_img_path):
+    bpy.data.objects["Terrain"].select_set(True)
 
-# should follow maxLon, minLon, maxLat, minLat
-loc_args = (-78.9340, -78.9426, 36.0036, 35.9965)
+    # compute mesh and vertices from Terrain object
+    terrain_dg = bpy.context.evaluated_depsgraph_get()
+    terrain_obj = bpy.context.object.evaluated_get(terrain_dg)
+    mesh = terrain_obj.to_mesh(depsgraph=terrain_dg)
+    vertices = mesh.vertices
 
-add_osm(*loc_args)
+    # compute the boundaries of the terrain
+    min_x, min_y = mesh.vertices[0].co.x, mesh.vertices[-1].co.y
+    max_x, max_y = mesh.vertices[-1].co.x, mesh.vertices[0].co.y
 
-add_plane(material_name='itu_concrete', size=1100)
+    # compute number of rows and columns in the terrain vertices
+    dx = abs(mesh.vertices[0].co.x - mesh.vertices[1].co.x)
+    num_x = int(round(abs((max_x - min_x) / dx))) + 1
+    num_y = int(round(len(list(mesh.vertices)) / num_x))
 
-abs_path = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_xml_files/duke_new/duke_new.xml'
+    terrain_img_arr = np.zeros((num_y, num_x))
 
-change_material_names(wall_name='itu_brick', roof_name='itu_plasterboard', f_path=abs_path)
+    for row in range(num_y):  # iterate through y, i.e. rows
+        terrain_img_arr[row, :] = [vertices[col].co.z for col in range(row*num_x, (row+1)*num_x, 1)]
+
+    terrain_img = Image.fromarray(terrain_img_arr)
+
+    if terrain_img.mode != 'L':
+        terrain_img = terrain_img.convert('L')
+
+    terrain_img.save(terrain_img_path)
+
+    bpy.data.objects["Terrain"].select_set(False)
+    return
+
+
+#delete_all_in_collection()
+
+## should follow maxLon, minLon, maxLat, minLat
+#diff = 0.001
+#loc_args_dict = {'maxLon': -78.9340+diff, 'minLon': -78.9426-diff, 'maxLat': 36.0036+diff, 'minLat': 35.9965-diff}
+
+#add_terrain(material_name='itu_concrete', **loc_args_dict)
+
+#loc_args_dict = {'maxLon': -78.9340, 'minLon': -78.9426, 'maxLat': 36.0036, 'minLat': 35.9965}
+#add_osm(**loc_args_dict)
+
+##add_plane(material_name='itu_concrete', size=1100)
+
+#abs_path = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_xml_files/duke_new2/duke_new2.xml'
+
+#change_material_names(wall_name='itu_brick', roof_name='itu_plasterboard', f_path=abs_path)
+
+#terrainImgPATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_terrain_img/duke_terrain.png'
+
+#terrain_to_png(terrain_img_path=terrainImgPATH)
