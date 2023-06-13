@@ -12,7 +12,7 @@ import numpy as np
 def install_package(package_name):
 
     # path to python.exe
-    python_exe = os.path.join(sys.prefix, 'bin', 'python.exe')
+    python_exe = os.path.join(sys.prefix, 'bin', 'python3.10')
      
     # upgrade pip
     subprocess.call([python_exe, "-m", "ensurepip"])
