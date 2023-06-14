@@ -4,6 +4,7 @@ import bpy
 import subprocess
 import sys
 import os
+import csv
 
 from PIL import Image
 import numpy as np
@@ -25,6 +26,28 @@ def install_package(package_name):
     return
 
 
+def delete_terrain_and_osm_files(PATH_download='/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_download_files'):
+    folder_path_osm = PATH_download + '/osm'  #enter path here
+    delete_files_from_directory(folder_path_osm)
+    folder_path_terrain = PATH_download + '/terrain'
+    delete_files_from_directory(folder_path_terrain)
+    return
+
+
+def delete_files_from_directory(folder_path):
+    for filename in os.listdir(folder_path): 
+        file_path = os.path.join(folder_path, filename)  
+        try:
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+#            elif os.path.isdir(file_path):  
+#                os.rmdir(file_path)
+        except Exception as e:  
+            print(f"Error deleting {file_path}: {e}")
+    print("Deletion done")
+    return
+
+
 def delete_all_in_collection():
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete(use_global=False)
@@ -35,6 +58,11 @@ def delete_all_in_collection():
     for col in collections_list:
         bpy.data.collections.remove(col)
     return
+
+
+def normalise_to_png(arr_to_norm, maxVal):
+    
+    return maxVal * (arr_to_norm-np.min(arr_to_norm))/(np.max(arr_to_norm)-np.min(arr_to_norm))
 
 
 def add_osm(maxLon, minLon, maxLat, minLat, from_file='n', osmFilepath=None):
@@ -113,10 +141,15 @@ def add_plane(material_name, size=1100):
 
 
 def change_material_names_and_export(wall_name, roof_name, f_path):
-    obj_names = [obj.name for obj in list(bpy.data.objects)]
-
+#    obj_names = [obj.name for obj in list(bpy.data.objects)]
+    obj_names = []
+    for obj in list(bpy.data.objects):
+        if 'Camera' not in obj.name and 'Terrain' not in obj.name:
+            obj_names.append(obj.name)   
+    
     # check that there's more than one object
     if len(list(bpy.data.objects)) != 1 and obj_names[-1] != 'Plane':
+        print(bpy.data.objects[obj_names[-1]])
         # set wall
         bpy.data.objects[obj_names[-1]].active_material_index = 0
         bpy.data.objects[obj_names[-1]].active_material.name = wall_name
@@ -131,7 +164,7 @@ def change_material_names_and_export(wall_name, roof_name, f_path):
     return
 
 
-def terrain_to_png(terrain_img_path):
+def terrain_to_png(terrain_img_path, save='n', normalise_to_256='n'):
     bpy.data.objects["Terrain"].select_set(True)
 
     # compute mesh and vertices from Terrain object
@@ -153,16 +186,20 @@ def terrain_to_png(terrain_img_path):
     num_y = int(round(len(list(mesh.vertices)) / num_x))
 
     terrain_img_arr = np.zeros((num_y, num_x))
+    
+    print(num_x, num_y)
 
     for row in range(num_y):  # iterate through y, i.e. rows
         terrain_img_arr[row, :] = [vertices[col].co.z for col in range(row*num_x, (row+1)*num_x, 1)]
 
+    if normalise_to_256 == 'y':
+        terrain_img_arr = normalise_to_png(terrain_img_arr, 256)
     terrain_img = Image.fromarray(terrain_img_arr)
 
     if terrain_img.mode != 'L':
         terrain_img = terrain_img.convert('L')
-
-    terrain_img.save(terrain_img_path)
+    if save == 'y':
+        terrain_img.save(terrain_img_path)
 
     bpy.data.objects["Terrain"].select_set(False)
     return min_x, max_x, min_y, max_y
@@ -189,7 +226,7 @@ def clear_compositing_nodes():
     return
 
 
-def get_height_at_origin(terrainLim, camera_height=2000, camera_orthoScale=2000):
+def get_height_at_origin(terrainLim, camera_height=2000, camera_orthoScale=2000, normalise_to_256='n'):
     min_x, max_x, min_y, max_y = terrainLim
     assert min_x < max_x and min_y < max_y
     # add a camera and link it to scene
@@ -197,7 +234,7 @@ def get_height_at_origin(terrainLim, camera_height=2000, camera_orthoScale=2000)
     camera_object = bpy.data.objects.new('Camera', camera_data)
     bpy.context.scene.collection.objects.link(camera_object)
     
-    curr_camera = bpy.data.cameras["Camera.001"]
+    curr_camera = bpy.data.cameras["Camera"]
     
     camera_object.location[2] = camera_height  # setting camera height
     curr_camera.type = 'ORTHO'  # setting camera type
@@ -208,7 +245,7 @@ def get_height_at_origin(terrainLim, camera_height=2000, camera_orthoScale=2000)
 #    curr_camera.track_axis = '-Z'
 #    curr_camera.up_axis = 'Y'
     
-    bpy.context.scene.camera = bpy.data.objects['Camera.001']
+    bpy.context.scene.camera = bpy.data.objects['Camera']
     
     # enable z data to be passed and use nodes for compositing
     bpy.data.scenes['Scene'].view_layers["ViewLayer"].use_pass_z = True
@@ -228,41 +265,92 @@ def get_height_at_origin(terrainLim, camera_height=2000, camera_orthoScale=2000)
     tree.nodes['Render Layers'].layer = 'ViewLayer'
     
     bpy.ops.render.render(layer='ViewLayer')
-    
-    
+
     depth = get_depth()
+    select_not_2D = depth > 65500
+    depth[select_not_2D] = 2000
+
+    if normalise_to_256 == 'y':
+        depth = normalise_to_png(depth, 256)
+    depth_img = Image.fromarray(depth)
+    
+    temp_path = '/Users/zeyuli/Desktop/temp_depth.png'
+    if depth_img.mode != 'L':
+        depth_img = depth_img.convert('L')
+    
+    depth_img.save(temp_path)
+    
     depth_flatten = depth.flatten()
     
     selection = np.asarray(np.copy(depth_flatten) < 65500)
+    
+    
     print(len(selection))
     depth_final = depth_flatten[selection]
     
     print()
     print(np.min(depth), np.max(depth_final))
-    bpy.data.objects["Camera.001"].select_set(False)
+    bpy.data.objects["Camera"].select_set(False)
     print('done\n')
     return
 
 
-delete_all_in_collection()
+def run(maxLon, minLon, maxLat, minLat, idx):
+#    bpy.ops.wm.read_factory_settings(use_empty=True)
+    
+    delete_all_in_collection()
 
-# should follow maxLon, minLon, maxLat, minLat
-diff = 0.001
-loc_args_dict = {'maxLon': -78.9340+diff, 'minLon': -78.9426-diff, 'maxLat': 36.0036+diff, 'minLat': 35.9965-diff}
+    # should follow maxLon, minLon, maxLat, minLat
+    diff = 0.001
+    loc_args_dict = {'maxLon': maxLon+diff, 'minLon': minLon-diff, 'maxLat': maxLat+diff, 'minLat': minLat-diff}
 
-add_terrain(material_name='itu_concrete', **loc_args_dict)
+    add_terrain(material_name='itu_concrete', **loc_args_dict)
 
-loc_args_dict = {'maxLon': -78.9340, 'minLon': -78.9426, 'maxLat': 36.0036, 'minLat': 35.9965}
-osm_f_path = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_download_files/osm/map.osm'
-add_osm(**loc_args_dict, from_file='y', osmFilepath=osm_f_path)
+    loc_args_dict = {'maxLon': maxLon, 'minLon': minLon, 'maxLat': maxLat, 'minLat': minLat}
 
-#add_plane(material_name='itu_concrete', size=1100)
+    # use already-downloaded osm
+#    osm_f_path = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_download_files/osm/map.osm'
+#    add_osm(**loc_args_dict, from_file='y', osmFilepath=osm_f_path)
+    
+    # download from server
+    add_osm(**loc_args_dict, from_file='n', osmFilepath=None)
 
-abs_path = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_xml_files/duke_new2/duke_new2.xml'
+    # do not add plane. Instead, add terrain
+    #add_plane(material_name='itu_concrete', size=1100)
 
-change_material_names_and_export(wall_name='itu_brick', roof_name='itu_plasterboard', f_path=abs_path)
+    # path of xml file which would be exported in change_material_names_and_export
+    
+    i = str(int(idx))
+    abs_path = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_xml_files/' + i + '/' + i + '.xml'
 
-terrainImgPATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_terrain_img/duke_terrain.png'
+    change_material_names_and_export(wall_name='itu_brick', roof_name='itu_plasterboard', f_path=abs_path)
 
-terrain_limits = terrain_to_png(terrain_img_path=terrainImgPATH)
-get_height_at_origin(terrain_limits, camera_height=2000, camera_orthoScale=2000)
+    terrainImgPATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_terrain_img/duke_terrain.png'
+
+    terrain_limits = terrain_to_png(terrain_img_path=terrainImgPATH, save='y')
+    get_height_at_origin(terrain_limits, camera_height=2000, camera_orthoScale=2000)
+    delete_terrain_and_osm_files()
+    return
+
+
+
+maxLon, minLon, maxLat, minLat = -78.9340, -78.9426, 36.0036, 35.9965
+
+run(maxLon, minLon, maxLat, minLat, idx=0)
+
+#loc_fPtr = open('/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res.txt', 'r')
+#lines = loc_fPtr.readlines()
+
+#print('\n\n')
+#idx = 0
+#for line in lines:
+#    idx += 1
+#    if idx > 10:
+#        break
+#    line = line.replace('(', '')
+#    line = line.replace(')', '')
+#    line = line.replace('\n', '')
+#    line = line.split(',')
+#    # file format: minLon, maxLat, maxLon, minLat
+#    minLon, maxLat, maxLon, minLat, _ = [float(l) for l in line]
+#    run(maxLon, minLon, maxLat, minLat, idx)
