@@ -37,7 +37,8 @@ def delete_all_in_collection():
     return
 
 
-def add_osm(maxLon, minLon, maxLat, minLat):
+def add_osm(maxLon, minLon, maxLat, minLat, from_file='n', osmFilepath=None):
+    bpy.data.scenes['Scene'].blosm.osmSource = 'server'
     bpy.data.scenes['Scene'].blosm.dataType = 'osm'
     
     bpy.data.scenes['Scene'].blosm.maxLon = maxLon
@@ -61,8 +62,13 @@ def add_osm(maxLon, minLon, maxLat, minLat):
     bpy.data.scenes["Scene"].blosm.highways = False
     bpy.data.scenes["Scene"].blosm.railways = False
     
-    # import
-    bpy.ops.blosm.import_data()
+    # import from server
+    if from_file == 'n':
+        bpy.ops.blosm.import_data()
+    if from_file == 'y' and osmFilepath is not None:
+        bpy.data.scenes['Scene'].blosm.osmSource = 'file'
+        bpy.data.scenes['Scene'].blosm.osmFilepath = osmFilepath
+        bpy.ops.blosm.import_data()
     return
 
 
@@ -106,7 +112,7 @@ def add_plane(material_name, size=1100):
     return
 
 
-def change_material_names(wall_name, roof_name, f_path):
+def change_material_names_and_export(wall_name, roof_name, f_path):
     obj_names = [obj.name for obj in list(bpy.data.objects)]
 
     # check that there's more than one object
@@ -137,7 +143,10 @@ def terrain_to_png(terrain_img_path):
     # compute the boundaries of the terrain
     min_x, min_y = mesh.vertices[0].co.x, mesh.vertices[-1].co.y
     max_x, max_y = mesh.vertices[-1].co.x, mesh.vertices[0].co.y
-
+    
+    print('x min and max of terrain mesh: ', min_x, max_x)
+    print('y min and max of terrain mesh: ', min_y, max_y)
+    
     # compute number of rows and columns in the terrain vertices
     dx = abs(mesh.vertices[0].co.x - mesh.vertices[1].co.x)
     num_x = int(round(abs((max_x - min_x) / dx))) + 1
@@ -156,26 +165,104 @@ def terrain_to_png(terrain_img_path):
     terrain_img.save(terrain_img_path)
 
     bpy.data.objects["Terrain"].select_set(False)
+    return min_x, max_x, min_y, max_y
+
+
+def get_depth():
+    """Obtains depth map from Blender render.
+    :return: The depth map of the rendered camera view as a numpy array of size (H,W).
+    """
+    z = bpy.data.images['Viewer Node']
+    w, h = z.size
+    dmap = np.array(z.pixels[:], dtype=np.float32) # convert to numpy array
+    dmap = np.reshape(dmap, (h, w, 4))[:,:,0]
+    dmap = np.rot90(dmap, k=2)
+    dmap = np.fliplr(dmap)
+    return dmap
+
+
+def clear_compositing_nodes():
+    bpy.data.scenes['Scene'].use_nodes = True
+    tree = bpy.data.scenes['Scene'].node_tree
+    for node in tree.nodes:
+        tree.nodes.remove(node)
     return
 
 
-#delete_all_in_collection()
+def get_height_at_origin(terrainLim, camera_height=2000, camera_orthoScale=2000):
+    min_x, max_x, min_y, max_y = terrainLim
+    assert min_x < max_x and min_y < max_y
+    # add a camera and link it to scene
+    camera_data = bpy.data.cameras.new(name='Camera')
+    camera_object = bpy.data.objects.new('Camera', camera_data)
+    bpy.context.scene.collection.objects.link(camera_object)
+    
+    curr_camera = bpy.data.cameras["Camera.001"]
+    
+    camera_object.location[2] = camera_height  # setting camera height
+    curr_camera.type = 'ORTHO'  # setting camera type
+    curr_camera.clip_start = 0.1  # setting clipping
+    curr_camera.clip_end = camera_height * 5
+    curr_camera.ortho_scale = camera_orthoScale  # setting camera scale
+    curr_camera.dof.use_dof = False  # do not use, this makes the photo misty
+#    curr_camera.track_axis = '-Z'
+#    curr_camera.up_axis = 'Y'
+    
+    bpy.context.scene.camera = bpy.data.objects['Camera.001']
+    
+    # enable z data to be passed and use nodes for compositing
+    bpy.data.scenes['Scene'].view_layers["ViewLayer"].use_pass_z = True
+    bpy.data.scenes['Scene'].use_nodes = True
+    
+    tree = bpy.data.scenes['Scene'].node_tree
+    
+    # clear nodes
+    clear_compositing_nodes()
+    
+    image_node = tree.nodes.new(type='CompositorNodeRLayers')
+    viewer_node = tree.nodes.new(type='CompositorNodeViewer')
+    viewer_node.location = 400, 0
+    
+    tree.links.new(image_node.outputs["Depth"], viewer_node.inputs['Image'])
+    
+    tree.nodes['Render Layers'].layer = 'ViewLayer'
+    
+    bpy.ops.render.render(layer='ViewLayer')
+    
+    
+    depth = get_depth()
+    depth_flatten = depth.flatten()
+    
+    selection = np.asarray(np.copy(depth_flatten) < 65500)
+    print(len(selection))
+    depth_final = depth_flatten[selection]
+    
+    print()
+    print(np.min(depth), np.max(depth_final))
+    bpy.data.objects["Camera.001"].select_set(False)
+    print('done\n')
+    return
 
-## should follow maxLon, minLon, maxLat, minLat
-#diff = 0.001
-#loc_args_dict = {'maxLon': -78.9340+diff, 'minLon': -78.9426-diff, 'maxLat': 36.0036+diff, 'minLat': 35.9965-diff}
 
-#add_terrain(material_name='itu_concrete', **loc_args_dict)
+delete_all_in_collection()
 
-#loc_args_dict = {'maxLon': -78.9340, 'minLon': -78.9426, 'maxLat': 36.0036, 'minLat': 35.9965}
-#add_osm(**loc_args_dict)
+# should follow maxLon, minLon, maxLat, minLat
+diff = 0.001
+loc_args_dict = {'maxLon': -78.9340+diff, 'minLon': -78.9426-diff, 'maxLat': 36.0036+diff, 'minLat': 35.9965-diff}
 
-##add_plane(material_name='itu_concrete', size=1100)
+add_terrain(material_name='itu_concrete', **loc_args_dict)
 
-#abs_path = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_xml_files/duke_new2/duke_new2.xml'
+loc_args_dict = {'maxLon': -78.9340, 'minLon': -78.9426, 'maxLat': 36.0036, 'minLat': 35.9965}
+osm_f_path = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_download_files/osm/map.osm'
+add_osm(**loc_args_dict, from_file='y', osmFilepath=osm_f_path)
 
-#change_material_names(wall_name='itu_brick', roof_name='itu_plasterboard', f_path=abs_path)
+#add_plane(material_name='itu_concrete', size=1100)
 
-#terrainImgPATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_terrain_img/duke_terrain.png'
+abs_path = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_xml_files/duke_new2/duke_new2.xml'
 
-#terrain_to_png(terrain_img_path=terrainImgPATH)
+change_material_names_and_export(wall_name='itu_brick', roof_name='itu_plasterboard', f_path=abs_path)
+
+terrainImgPATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_terrain_img/duke_terrain.png'
+
+terrain_limits = terrain_to_png(terrain_img_path=terrainImgPATH)
+get_height_at_origin(terrain_limits, camera_height=2000, camera_orthoScale=2000)
