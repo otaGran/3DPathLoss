@@ -11,6 +11,14 @@ from PIL import Image
 import numpy as np
 
 
+error_path_IdxAndPercentBuildings = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/error_IdxAndPercentBuildings.txt'
+error_path_Exception = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/error_Exception.txt'
+HeightAtOrigin_path = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/HeightAtOrigin.txt'
+f_ptr_error_IdxAndPercentBuildings = open(error_path_IdxAndPercentBuildings, 'w')
+f_ptr_error_Exception = open(error_path_Exception, 'a')
+f_ptr_HeightAtOrigin = open(HeightAtOrigin_path, 'w')
+
+
 def install_package(package_name):
 
     # path to python.exe
@@ -172,7 +180,7 @@ def change_material_names_and_export(wall_name, roof_name, f_path):
         bpy.data.objects[obj_names[-1]].active_material_index = 1
         bpy.data.objects[obj_names[-1]].active_material.name = roof_name
     else:
-        print("there's only one object (a plane) in this Scene Collection")
+        raise Exception("There are no OSM building objects in this Scene Collection")
     # suppress and then turn on terminal output
 #    sys.stdout, sys.stderr = os.devnull, os.devnull
     # export
@@ -181,7 +189,7 @@ def change_material_names_and_export(wall_name, roof_name, f_path):
     return 0
 
 
-def terrain_to_png(terrain_img_path, outer_idx, save='n', normalise_to_256='n'):
+def terrain_to_png(terrain_img_path, f_ptr, outer_idx, save='n', normalise_to_256='n'):
     bpy.data.objects["Terrain"].select_set(True)
 
     # compute mesh and vertices from Terrain object
@@ -222,8 +230,8 @@ def terrain_to_png(terrain_img_path, outer_idx, save='n', normalise_to_256='n'):
         # initial run upon starting Blender, so I'm running
         # a "test run" using idx = -1 to clear up this stuff
         if num_x * num_y != len(vertices):
-            if outer_idx == 1:
-                f_ptr_error_Exception.write('Exception at -1 for test run, which is expected\n')
+            if outer_idx == -1:
+                f_ptr.write('Exception at -1 for test run, which is expected\n')
             else:
                 print('\n\n incorrect')
                 print('row, col: ' + str(num_y), str(num_x) + '\n')
@@ -244,6 +252,7 @@ def terrain_to_png(terrain_img_path, outer_idx, save='n', normalise_to_256='n'):
             terrain_img_arr = normalise_to_png(terrain_img_arr, 256)
         terrain_img = Image.fromarray(terrain_img_arr)
 
+        # this converts float32 to png (int8)
 #        if terrain_img.mode != 'L':
 #            terrain_img = terrain_img.convert('L')
         
@@ -317,16 +326,21 @@ def get_height_at_origin(terrainLim, camera_height=2000, camera_orthoScale=2000,
     depth = get_depth()
     select_not_2D = depth > 65500
     depth[select_not_2D] = 2000
+    
+    # get height at origin using a simple reflection
+    roww, coll = depth.shape
+    height = camera_height - depth[int(round(roww/2)), int(round(coll/2))]
 
     if normalise_to_256 == 'y':
         depth = normalise_to_png(depth, 256)
     depth_img = Image.fromarray(depth)
     
-    temp_path = '/Users/zeyuli/Desktop/temp_depth.png'
-    if depth_img.mode != 'L':
-        depth_img = depth_img.convert('L')
+    ## saving for illustrative purposes:
+#    temp_path = '/Users/zeyuli/Desktop/temp_depth.png'
+#    if depth_img.mode != 'L':
+#        depth_img = depth_img.convert('L')
     
-    # depth_img.save(temp_path)
+#    depth_img.save(temp_path)
     
     depth_flatten = depth.flatten()
     
@@ -337,11 +351,24 @@ def get_height_at_origin(terrainLim, camera_height=2000, camera_orthoScale=2000,
     print()
     print('min_depth: ', np.min(depth), '. max_depth: ', np.max(depth_final))
     bpy.data.objects["Camera"].select_set(False)
-    print('done with get_height_at_origin\n')
-    return
+    print('Done with get_height_at_origin\n')
+    return height
 
 
-def run(maxLon, minLon, maxLat, minLat, idx):
+def calc_totalOSM_above_thresh(perc, text_lines):
+    c = 0
+    for text_line in text_lines:
+        text_line = text_line.replace('(', '')
+        text_line = text_line.replace(')', '')
+        text_line = text_line.replace('\n', '')
+        text_line = text_line.split(',')
+        _, _, _, _, temp_percent = [float(lll) for lll in text_line]
+        if temp_percent > perc:
+            c += 1
+    return c
+
+
+def run(maxLon, minLon, maxLat, minLat, idx, f_ptr_Exception=f_ptr_error_Exception, f_ptr_height=f_ptr_HeightAtOrigin):
 #    bpy.ops.wm.read_factory_settings(use_empty=True)
     
 #    bpy.ops.read_homefile(filepath='/Applications/Blender.app/Contents/Resources/3.3/scripts/startup/bl_app_templates_system/OSM/startup.blend')
@@ -375,17 +402,16 @@ def run(maxLon, minLon, maxLat, minLat, idx):
         return
     
     terrainImgPATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_terrain_img/' + i + '.tiff'
-    terrain_limits = terrain_to_png(terrain_img_path=terrainImgPATH, save='y', outer_idx=idx)
+    terrain_limits = terrain_to_png(terrain_img_path=terrainImgPATH, save='y', outer_idx=idx, f_ptr=f_ptr_Exception)
     
-    get_height_at_origin(terrain_limits, camera_height=2000, camera_orthoScale=2000)
+    height_at_origin = get_height_at_origin(terrain_limits, camera_height=2000, camera_orthoScale=2000)
+    f_ptr_height.write(str(height_at_origin) + '\n')
     delete_terrain_and_osm_files()
     return
 
 
-## running Duke
+## running Duke (this is run to overcome error in terrain_to_png on first run of run())
 maxLon, minLon, maxLat, minLat = -78.9340, -78.9426, 36.0036, 35.9965
-
-#run(maxLon, minLon, maxLat, minLat, idx=0)
 
 run(maxLon, minLon, maxLat, minLat, idx=-1)
 
@@ -393,18 +419,17 @@ loc_fPtr = open('/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res.t
 lines = loc_fPtr.readlines()
 print(len(lines))
 
-error_path_IdxAndPercentBuildings = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/error_IdxAndPercentBuildings.txt'
-error_path_Exception = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/error_Exception.txt'
-f_ptr_error_IdxAndPercentBuildings = open(error_path_IdxAndPercentBuildings, 'w')
-f_ptr_error_Exception = open(error_path_Exception, 'a')
-
 f_ptr_error_Exception.write('\n\n\n-------\nRun started at: ' + str(datetime.now()) + '\n')
 
-percent_threshold = 0.0001
+percent_threshold = 0.1
+
+num = calc_totalOSM_above_thresh(perc=percent_threshold, text_lines=lines)
+print('Numer of OSM with building to area ratio above ' + str(percent_threshold) + ' is', str(num))
+
 idx = 0
 count = 0
 for line in lines:
-    if idx > 1:
+    if idx > 3:
         break
     line = line.replace('(', '')
     line = line.replace(')', '')
@@ -429,7 +454,9 @@ print('percentage of files with bulding to area ratio > ' + str(percent_threshol
 f_ptr_error_Exception.write(str(datetime.now()) + ', last index: ' + str(idx) + '\n')
 f_ptr_error_Exception.write('number of OSM files exported: ' + str(count) + '\n')
 
+# close files
 f_ptr_error_Exception.close()
 f_ptr_error_IdxAndPercentBuildings.close()
+f_ptr_HeightAtOrigin.close()
 
-print('\n\n\nDONE\n\n')
+print('\nDONE\n\n\n\n\n')
