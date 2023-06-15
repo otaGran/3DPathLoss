@@ -4,7 +4,8 @@ import bpy
 import subprocess
 import sys
 import os
-import csv
+from datetime import datetime
+import time
 
 from PIL import Image
 import numpy as np
@@ -68,6 +69,7 @@ def normalise_to_png(arr_to_norm, maxVal):
 def add_osm(maxLon, minLon, maxLat, minLat, from_file='n', osmFilepath=None):
     bpy.data.scenes['Scene'].blosm.osmSource = 'server'
     bpy.data.scenes['Scene'].blosm.dataType = 'osm'
+    bpy.data.scenes['Scene'].blosm.ignoreGeoreferencing = True
     
     bpy.data.scenes['Scene'].blosm.maxLon = maxLon
     bpy.data.scenes['Scene'].blosm.minLon = minLon
@@ -92,7 +94,9 @@ def add_osm(maxLon, minLon, maxLat, minLat, from_file='n', osmFilepath=None):
     
     # import from server
     if from_file == 'n':
+        start = time.time()
         bpy.ops.blosm.import_data()
+        print('\n\nosm download: ', str(time.time() - start) + ' seconds\n\n')
     if from_file == 'y' and osmFilepath is not None:
         bpy.data.scenes['Scene'].blosm.osmSource = 'file'
         bpy.data.scenes['Scene'].blosm.osmFilepath = osmFilepath
@@ -106,6 +110,7 @@ def add_terrain(material_name, maxLon, minLon, maxLat, minLat):
     
     # ensure correct settings
     bpy.data.scenes['Scene'].blosm.ignoreGeoreferencing = False
+    bpy.data.scenes['Scene'].blosm.ignoreGeoreferencing = True
     
     # set bounds of import
     bpy.data.scenes['Scene'].blosm.maxLon = maxLon
@@ -115,7 +120,9 @@ def add_terrain(material_name, maxLon, minLon, maxLat, minLat):
     bpy.data.scenes['Scene'].blosm.minLat = minLat
     
     # import
+    start = time.time()
     bpy.ops.blosm.import_data()
+    print('\n\nTerrain download: ', str(time.time() - start) + ' seconds\n\n')
     
     # set properties
     terrain_obj = bpy.data.objects['Terrain']
@@ -141,15 +148,23 @@ def add_plane(material_name, size=1100):
 
 
 def change_material_names_and_export(wall_name, roof_name, f_path):
-#    obj_names = [obj.name for obj in list(bpy.data.objects)]
+    obj_names = [obj.name for obj in list(bpy.data.objects)]
+    if len(obj_names) <= 2:
+        return 1
+    
+#    print(obj_names)
     obj_names = []
+    map_name = ''
     for obj in list(bpy.data.objects):
-        if 'Camera' not in obj.name and 'Terrain' not in obj.name:
-            obj_names.append(obj.name)   
+        if 'Camera' not in obj.name and 'Terrain' not in obj.name and 'osm_buildings' not in obj.name:
+            obj_names.append(obj.name)
+        if '.osm' in obj.name:
+            map_name = obj.name
     
     # check that there's more than one object
-    if len(list(bpy.data.objects)) != 1 and obj_names[-1] != 'Plane':
-        print(bpy.data.objects[obj_names[-1]])
+#    print(list(bpy.data.objects))
+    if len(list(bpy.data.objects)) >= 1:
+#        print(bpy.data.objects[obj_names[-1]])
         # set wall
         bpy.data.objects[obj_names[-1]].active_material_index = 0
         bpy.data.objects[obj_names[-1]].active_material.name = wall_name
@@ -158,13 +173,15 @@ def change_material_names_and_export(wall_name, roof_name, f_path):
         bpy.data.objects[obj_names[-1]].active_material.name = roof_name
     else:
         print("there's only one object (a plane) in this Scene Collection")
-
+    # suppress and then turn on terminal output
+#    sys.stdout, sys.stderr = os.devnull, os.devnull
     # export
     bpy.ops.export_scene.mitsuba(filepath=f_path, axis_forward='Y', axis_up='Z')
-    return
+#    sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
+    return 0
 
 
-def terrain_to_png(terrain_img_path, save='n', normalise_to_256='n'):
+def terrain_to_png(terrain_img_path, outer_idx, save='n', normalise_to_256='n'):
     bpy.data.objects["Terrain"].select_set(True)
 
     # compute mesh and vertices from Terrain object
@@ -174,6 +191,8 @@ def terrain_to_png(terrain_img_path, save='n', normalise_to_256='n'):
     vertices = mesh.vertices
 
     # compute the boundaries of the terrain
+    # min_x: top-left corner; min_y: bottom-right corner
+    # max_x: bottom-right corner; max_y: top-left corner
     min_x, min_y = mesh.vertices[0].co.x, mesh.vertices[-1].co.y
     max_x, max_y = mesh.vertices[-1].co.x, mesh.vertices[0].co.y
     
@@ -181,24 +200,53 @@ def terrain_to_png(terrain_img_path, save='n', normalise_to_256='n'):
     print('y min and max of terrain mesh: ', min_y, max_y)
     
     # compute number of rows and columns in the terrain vertices
-    dx = abs(mesh.vertices[0].co.x - mesh.vertices[1].co.x)
-    num_x = int(round(abs((max_x - min_x) / dx))) + 1
-    num_y = int(round(len(list(mesh.vertices)) / num_x))
-
-    terrain_img_arr = np.zeros((num_y, num_x))
+    # to do this, compute the difference array. Then, find the index
+    # of the first location where the difference is negative. 
+    # This index is the number of columns. This works because the vertices
+    # array for the terain lists vertices from top to bottom 
+    # and from left to right. 
+    dx = [mesh.vertices[i].co.x - mesh.vertices[i-1].co.x for i in range(1, len(vertices))]
     
-    print(num_x, num_y)
-
-    for row in range(num_y):  # iterate through y, i.e. rows
-        terrain_img_arr[row, :] = [vertices[col].co.z for col in range(row*num_x, (row+1)*num_x, 1)]
-
-    if normalise_to_256 == 'y':
-        terrain_img_arr = normalise_to_png(terrain_img_arr, 256)
-    terrain_img = Image.fromarray(terrain_img_arr)
-
-    if terrain_img.mode != 'L':
-        terrain_img = terrain_img.convert('L')
+    x_idx = -1
+    for idx, delt in enumerate(dx):
+        if delt < 0:
+            x_idx = idx
+            break
+    print(x_idx)
+    
     if save == 'y':
+        num_x = x_idx + 1
+        num_y = int(round(len(list(mesh.vertices)) / num_x))
+        
+        # weird Blender behaviour: this function fails on 
+        # initial run upon starting Blender, so I'm running
+        # a "test run" using idx = -1 to clear up this stuff
+        if num_x * num_y != len(vertices):
+            if outer_idx == 1:
+                f_ptr_error_Exception.write('Exception at -1 for test run, which is expected\n')
+            else:
+                print('\n\n incorrect')
+                print('row, col: ' + str(num_y), str(num_x) + '\n')
+                print('what the size should be:', str(len(vertices)) + '\n')
+                raise Exception('terrain_to_png Did not get the correct row_len and col_len')
+            
+        terrain_img_arr = np.zeros((num_y, num_x))
+        
+        print(num_x, num_y, num_x*num_y, len(vertices))
+#        for idx, vert in enumerate(vertices):
+#            print(vert.co.z)
+#            if idx == num_x:
+#                break
+        for row in range(num_y):  # iterate through y, i.e. rows
+            terrain_img_arr[row, :] = [vertices[col].co.z for col in range(row*num_x, (row+1)*num_x, 1)]
+
+        if normalise_to_256 == 'y':
+            terrain_img_arr = normalise_to_png(terrain_img_arr, 256)
+        terrain_img = Image.fromarray(terrain_img_arr)
+
+#        if terrain_img.mode != 'L':
+#            terrain_img = terrain_img.convert('L')
+        
         terrain_img.save(terrain_img_path)
 
     bpy.data.objects["Terrain"].select_set(False)
@@ -278,30 +326,30 @@ def get_height_at_origin(terrainLim, camera_height=2000, camera_orthoScale=2000,
     if depth_img.mode != 'L':
         depth_img = depth_img.convert('L')
     
-    depth_img.save(temp_path)
+    # depth_img.save(temp_path)
     
     depth_flatten = depth.flatten()
     
     selection = np.asarray(np.copy(depth_flatten) < 65500)
     
-    
-    print(len(selection))
     depth_final = depth_flatten[selection]
     
     print()
-    print(np.min(depth), np.max(depth_final))
+    print('min_depth: ', np.min(depth), '. max_depth: ', np.max(depth_final))
     bpy.data.objects["Camera"].select_set(False)
-    print('done\n')
+    print('done with get_height_at_origin\n')
     return
 
 
 def run(maxLon, minLon, maxLat, minLat, idx):
 #    bpy.ops.wm.read_factory_settings(use_empty=True)
     
+#    bpy.ops.read_homefile(filepath='/Applications/Blender.app/Contents/Resources/3.3/scripts/startup/bl_app_templates_system/OSM/startup.blend')
+#    bpy.ops.wm.read_userpref()
     delete_all_in_collection()
 
     # should follow maxLon, minLon, maxLat, minLat
-    diff = 0.001
+    diff = 0.0015
     loc_args_dict = {'maxLon': maxLon+diff, 'minLon': minLon-diff, 'maxLat': maxLat+diff, 'minLat': minLat-diff}
 
     add_terrain(material_name='itu_concrete', **loc_args_dict)
@@ -319,38 +367,69 @@ def run(maxLon, minLon, maxLat, minLat, idx):
     #add_plane(material_name='itu_concrete', size=1100)
 
     # path of xml file which would be exported in change_material_names_and_export
-    
     i = str(int(idx))
     abs_path = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_xml_files/' + i + '/' + i + '.xml'
 
-    change_material_names_and_export(wall_name='itu_brick', roof_name='itu_plasterboard', f_path=abs_path)
-
-    terrainImgPATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_terrain_img/duke_terrain.png'
-
-    terrain_limits = terrain_to_png(terrain_img_path=terrainImgPATH, save='y')
+    ret = change_material_names_and_export(wall_name='itu_brick', roof_name='itu_plasterboard', f_path=abs_path)
+    if ret != 0:
+        return
+    
+    terrainImgPATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_terrain_img/' + i + '.tiff'
+    terrain_limits = terrain_to_png(terrain_img_path=terrainImgPATH, save='y', outer_idx=idx)
+    
     get_height_at_origin(terrain_limits, camera_height=2000, camera_orthoScale=2000)
     delete_terrain_and_osm_files()
     return
 
 
-
+## running Duke
 maxLon, minLon, maxLat, minLat = -78.9340, -78.9426, 36.0036, 35.9965
 
-run(maxLon, minLon, maxLat, minLat, idx=0)
+#run(maxLon, minLon, maxLat, minLat, idx=0)
 
-#loc_fPtr = open('/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res.txt', 'r')
-#lines = loc_fPtr.readlines()
+run(maxLon, minLon, maxLat, minLat, idx=-1)
 
-#print('\n\n')
-#idx = 0
-#for line in lines:
-#    idx += 1
-#    if idx > 10:
-#        break
-#    line = line.replace('(', '')
-#    line = line.replace(')', '')
-#    line = line.replace('\n', '')
-#    line = line.split(',')
-#    # file format: minLon, maxLat, maxLon, minLat
-#    minLon, maxLat, maxLon, minLat, _ = [float(l) for l in line]
-#    run(maxLon, minLon, maxLat, minLat, idx)
+loc_fPtr = open('/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res.txt', 'r')
+lines = loc_fPtr.readlines()
+print(len(lines))
+
+error_path_IdxAndPercentBuildings = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/error_IdxAndPercentBuildings.txt'
+error_path_Exception = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/error_Exception.txt'
+f_ptr_error_IdxAndPercentBuildings = open(error_path_IdxAndPercentBuildings, 'w')
+f_ptr_error_Exception = open(error_path_Exception, 'a')
+
+f_ptr_error_Exception.write('\n\n\n-------\nRun started at: ' + str(datetime.now()) + '\n')
+
+percent_threshold = 0.0001
+idx = 0
+count = 0
+for line in lines:
+    if idx > 1:
+        break
+    line = line.replace('(', '')
+    line = line.replace(')', '')
+    line = line.replace('\n', '')
+    line = line.split(',')
+    # file format: minLon, maxLat, maxLon, minLat
+    minLon, maxLat, maxLon, minLat, percent = [float(l) for l in line]
+    if percent > percent_threshold:
+        try:
+            run(maxLon, minLon, maxLat, minLat, idx)
+        except Exception as e:
+            f_ptr_error_Exception.write(str(datetime.now()) + '\n')
+            f_ptr_error_Exception.write(str(idx) + ',' + str(percent) + ',' + str(e) + '\n')
+            f_ptr_error_IdxAndPercentBuildings.write(str(idx) + ',' + str(percent) + '\n')
+            print(e)
+        count += 1
+    idx += 1
+    
+print('number of files with bulding to area ratio > ' + str(percent_threshold), count)
+print('percentage of files with bulding to area ratio > ' + str(percent_threshold), count / len(lines))
+
+f_ptr_error_Exception.write(str(datetime.now()) + ', last index: ' + str(idx) + '\n')
+f_ptr_error_Exception.write('number of OSM files exported: ' + str(count) + '\n')
+
+f_ptr_error_Exception.close()
+f_ptr_error_IdxAndPercentBuildings.close()
+
+print('\n\n\nDONE\n\n')
