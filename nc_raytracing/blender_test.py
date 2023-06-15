@@ -61,12 +61,24 @@ def delete_files_from_directory(folder_path):
 def delete_all_in_collection():
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete(use_global=False)
-    bpy.ops.outliner.orphans_purge()
     
     # clears all collections
     collections_list = list(bpy.data.collections)
     for col in collections_list:
         bpy.data.collections.remove(col)
+    
+    for block in bpy.data.meshes:
+        bpy.data.meshes.remove(block)
+
+    for block in bpy.data.materials:
+        bpy.data.materials.remove(block)
+
+    for block in bpy.data.textures:
+        bpy.data.textures.remove(block)
+
+    for block in bpy.data.images:
+        bpy.data.images.remove(block)
+    bpy.ops.outliner.orphans_purge(do_local_ids=True)
     return
 
 
@@ -156,6 +168,14 @@ def add_plane(material_name, size=1100):
     return
 
 
+def replace_material(obj_data, mat_src, mat_dest):
+    for iii in range(len(obj_data.materials)):
+        # test if the old material is in the slot and replace it
+        if obj_data.materials[iii] == mat_src:
+            obj_data.materials[iii] = mat_dest
+    return
+
+
 def change_material_names_and_export(wall_name, roof_name, f_path, outer_idx):
     obj_names = [obj.name for obj in list(bpy.data.objects)]
     if len(obj_names) <= 2:
@@ -168,12 +188,76 @@ def change_material_names_and_export(wall_name, roof_name, f_path, outer_idx):
     
     # check that there's more than one object
     if len(list(bpy.data.objects)) >= 1:
-        # set wall
-        bpy.data.objects[obj_names[-1]].active_material_index = 0
-        bpy.data.objects[obj_names[-1]].active_material.name = wall_name
-        # set roof
-        bpy.data.objects[obj_names[-1]].active_material_index = 1
-        bpy.data.objects[obj_names[-1]].active_material.name = roof_name
+        mat_wall = bpy.data.materials.get(wall_name)
+        if mat_wall is None:
+            bpy.data.materials.new(name=wall_name)
+            bpy.data.materials[wall_name].diffuse_color[0] = 0.666
+
+        mat_roof = bpy.data.materials.get(roof_name)
+        if mat_roof is None:
+            bpy.data.materials.new(name=roof_name)
+
+        for obj_name in obj_names:
+           # bpy.data.objects[obj_name].active_material_index = 0
+           # bpy.data.objects[obj_name].active_material.name = wall_name
+           #
+           # bpy.data.objects[obj_name].active_material_index = 1
+           # bpy.data.objects[obj_name].active_material.name = roof_name
+
+            obj_data = bpy.data.objects[obj_name].data
+
+            bpy.data.objects[obj_name].active_material_index = 0
+            if bpy.data.objects[obj_name].active_material.name != wall_name:
+                mat_destination = bpy.data.materials[wall_name]
+                mat_source = bpy.data.materials[bpy.data.objects[obj_name].active_material.name]
+                replace_material(obj_data, mat_source, mat_destination)
+
+            bpy.data.objects[obj_name].active_material_index = 1
+            if bpy.data.objects[obj_name].active_material.name != roof_name:
+                mat_destination = bpy.data.materials[roof_name]
+                mat_source = bpy.data.materials[bpy.data.objects[obj_name].active_material.name]
+                replace_material(obj_data, mat_source, mat_destination)
+
+            if len(list(obj_data.materials)) > 2:
+                for jjj in range(2, len(list(obj_data.materials))):
+                    bpy.data.objects[obj_name].active_material_index = jjj
+                    bpy.ops.object.material_slot_remove()
+
+
+        
+        # # set wall
+        # bpy.data.objects[obj_names[-1]].active_material_index = 0
+        # bpy.data.objects[obj_names[-1]].active_material.name = wall_name
+        # # set roof
+        # bpy.data.objects[obj_names[-1]].active_material_index = 1
+        # bpy.data.objects[obj_names[-1]].active_material.name = roof_name
+        
+
+
+#        for obj_name in obj_names:
+#            obj_inner = bpy.data.objects[obj_name]
+#            for mat_slot in obj_inner.material_slots:
+#                mat_inner = mat_slot.material
+#                print(mat_slot.link)
+
+
+
+        # mats = bpy.data.materials
+        # 
+        # for obj in bpy.data.objects:
+        #     for slt in obj.material_slots:
+        #         part = slt.name.rpartition('.')
+        #         if part[2].isnumeric() and part[0] in mats:
+        #             slt.material = mats.get(part[0])
+
+
+
+#    for obj in bpy.data.objects:
+#        for 
+
+
+
+
     else:
         raise Exception("There are no OSM building objects in this Scene Collection")
     # export
@@ -357,94 +441,116 @@ def calc_totalOSM_above_thresh(perc, text_lines):
     return c
 
 
-def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, f_ptr_Exception=f_ptr_error_Exception, f_ptr_height=f_ptr_HeightAtOrigin):
-    # bpy.ops.wm.read_userpref()
-    delete_all_in_collection()
-
-    # should follow maxLon, minLon, maxLat, minLat
-    diff = 0.0015
-    loc_args_dict = {'maxLon': maxLon+diff, 'minLon': minLon-diff, 'maxLat': maxLat+diff, 'minLat': minLat-diff}
-
-    # do not add plane. Instead, add terrain
-    add_terrain(material_name='itu_concrete', **loc_args_dict)
-
-    loc_args_dict = {'maxLon': maxLon, 'minLon': minLon, 'maxLat': maxLat, 'minLat': minLat}
-
-    # use already-downloaded osm
-#    osm_f_path = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_download_files/osm/map.osm'
-#    add_osm(**loc_args_dict, from_file='y', osmFilepath=osm_f_path)
-    
-    # download from server
-    add_osm(**loc_args_dict, from_file='n', osmFilepath=None)
-
-    # path of xml file which would be exported in change_material_names_and_export
-    i = str(int(run_idx))
-    uuid_run = uuid.uuid4()
-    save_name = i + '_' + str(uuid_run)
-
-    # change_material_names_and_export WRITES the XML file as well as the Meshes
-    export_path = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_xml_files/' + save_name + '/' + save_name + '.xml'
-    ret = change_material_names_and_export(wall_name='itu_brick', roof_name='itu_plasterboard', f_path=export_path, outer_idx=run_idx)
-    if ret != 0:
-        return
-
-    # terrain_limits WRITES the terrain height information as tiff
-    terrainImgPATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_terrain_img/' + save_name + '.tiff'
-    terrain_limits = terrain_to_png(terrain_img_path=terrainImgPATH, save='y', outer_idx=run_idx, f_ptr=f_ptr_Exception)
-
-    height_at_origin = get_height_at_origin(terrain_limits, camera_height=2000, camera_orthoScale=2000)
-    if run_idx != -1:
-        f_ptr_height.write('({:f},{:f},{:f},{:f}),{:f},{:.1f},'.format(minLon, maxLat, maxLon, minLat, buildingToAreaRatio, height_at_origin) + save_name + '\n')
-
-    delete_terrain_and_osm_files()
-    return
-
-
-## running Duke (this is run to overcome error in terrain_to_png on first run of run())
-maxLonOut, minLonOut, maxLatOut, minLatOut = -78.9340, -78.9426, 36.0036, 35.9965
-
-run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=None, run_idx=-1)
-
-loc_fPtr = open('/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res.txt', 'r')
-lines = loc_fPtr.readlines()
-print(len(lines))
-
-f_ptr_error_Exception.write('\n\n\n-------\nRun started at: ' + str(datetime.now()) + '\n')
-
-percent_threshold = 0.1
-
-num = calc_totalOSM_above_thresh(perc=percent_threshold, text_lines=lines)
-print('Numer of OSM with building to area ratio above ' + str(percent_threshold) + ' is', str(num))
-
-idx = 0
-count = 0
-for line in lines:
+def get_floats_from_coordsFile(line):
     line = line.replace('(', '')
     line = line.replace(')', '')
     line = line.replace('\n', '')
     line = line.split(',')
-    # file format: minLon, maxLat, maxLon, minLat
-    minLonOut, maxLatOut, maxLonOut, minLatOut, percent = [float(l) for l in line]
-    if percent > percent_threshold:
-        try:
-            run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=percent, run_idx=idx)
-        except Exception as e:
-            f_ptr_error_Exception.write(str(datetime.now()) + '\n')
-            f_ptr_error_Exception.write(str(idx) + ',' + str(percent) + ',' + str(e) + '\n')
-            f_ptr_error_IdxAndPercentBuildings.write(str(idx) + ',' + str(percent) + '\n')
-            print(e)
-        count += 1
-    idx += 1
-    
-print('number of files with bulding to area ratio > ' + str(percent_threshold), count)
-print('percentage of files with bulding to area ratio > ' + str(percent_threshold), count / len(lines))
+    # file format: (minLon, maxLat, maxLon, minLat), building_to_area ratio
+    minLon, maxLat, maxLon, minLat, per = [float(l) for l in line]
+    return minLon, maxLat, maxLon, minLat, per
 
-f_ptr_error_Exception.write(str(datetime.now()) + ', last index: ' + str(idx) + '\n')
-f_ptr_error_Exception.write('number of OSM files exported: ' + str(count) + '\n')
 
-# close files
-f_ptr_error_Exception.close()
-f_ptr_error_IdxAndPercentBuildings.close()
-f_ptr_HeightAtOrigin.close()
+def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, f_ptr_Exception=f_ptr_error_Exception, f_ptr_height=f_ptr_HeightAtOrigin):
+    try:
+        # bpy.ops.wm.read_userpref()
+        delete_all_in_collection()
 
-print('\nDONE\n\n\n\n\n')
+        # should follow maxLon, minLon, maxLat, minLat
+        diff = 0.0015
+        loc_args_dict = {'maxLon': maxLon+diff, 'minLon': minLon-diff, 'maxLat': maxLat+diff, 'minLat': minLat-diff}
+
+        # do not add plane. Instead, add terrain
+        add_terrain(material_name='itu_concrete', **loc_args_dict)
+
+        loc_args_dict = {'maxLon': maxLon, 'minLon': minLon, 'maxLat': maxLat, 'minLat': minLat}
+
+        # use already-downloaded osm
+    #    osm_f_path = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_download_files/osm/map.osm'
+    #    add_osm(**loc_args_dict, from_file='y', osmFilepath=osm_f_path)
+
+        # download from server
+        add_osm(**loc_args_dict, from_file='n', osmFilepath=None)
+
+        # path of xml file which would be exported in change_material_names_and_export
+        i = str(int(run_idx))
+        uuid_run = uuid.uuid4()
+        save_name = i + '_' + str(uuid_run)
+
+        # change_material_names_and_export WRITES the XML file as well as the Meshes
+        export_path = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_xml_files/' + save_name + '/' + save_name + '.xml'
+        ret = change_material_names_and_export(wall_name='itu_brick', roof_name='itu_plasterboard', f_path=export_path, outer_idx=run_idx)
+        if ret != 0:
+            return
+
+        # terrain_limits WRITES the terrain height information as tiff
+        terrainImgPATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_terrain_img/' + save_name + '.tiff'
+        terrain_limits = terrain_to_png(terrain_img_path=terrainImgPATH, save='y', outer_idx=run_idx, f_ptr=f_ptr_Exception)
+
+        height_at_origin = get_height_at_origin(terrain_limits, camera_height=2000, camera_orthoScale=2000)
+        if run_idx != -1:
+            f_ptr_height.write('({:f},{:f},{:f},{:f}),{:f},{:.1f},'.format(minLon, maxLat, maxLon, minLat, buildingToAreaRatio, height_at_origin) + save_name + '\n')
+
+        delete_terrain_and_osm_files()
+    except Exception as e:
+        raise e
+    return
+
+
+# running lines[1626]
+loc_fPtr = open('/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res.txt', 'r')
+lines = loc_fPtr.readlines()
+minLonOut, maxLatOut, maxLonOut, minLatOut, ratio = get_floats_from_coordsFile(lines[1626])
+run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=ratio, run_idx=1626)
+print(ratio)
+
+
+
+### running Duke (this is run to overcome error in terrain_to_png on first run of run())
+#maxLonOut, minLonOut, maxLatOut, minLatOut = -78.9340, -78.9426, 36.0036, 35.9965
+
+#run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=None, run_idx=-1)
+
+#loc_fPtr = open('/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res.txt', 'r')
+#lines = loc_fPtr.readlines()
+#print(len(lines))
+
+#f_ptr_error_Exception.write('\n\n\n-------\nRun started at: ' + str(datetime.now()) + '\n')
+
+#percent_threshold = 0.1
+
+#num = calc_totalOSM_above_thresh(perc=percent_threshold, text_lines=lines)
+#print('Numer of OSM with building to area ratio above ' + str(percent_threshold) + ' is', str(num))
+
+#idx = 0
+#count = 0
+#for line in lines:
+#    line = line.replace('(', '')
+#    line = line.replace(')', '')
+#    line = line.replace('\n', '')
+#    line = line.split(',')
+#    # file format: minLon, maxLat, maxLon, minLat
+#    minLonOut, maxLatOut, maxLonOut, minLatOut, percent = [float(l) for l in line]
+#    if percent > percent_threshold:
+#        try:
+#            run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=percent, run_idx=idx)
+#        except Exception as e:
+#            f_ptr_error_Exception.write(str(datetime.now()) + '\n')
+#            f_ptr_error_Exception.write(str(idx) + ',' + str(percent) + ',' + str(e) + '\n')
+#            f_ptr_error_IdxAndPercentBuildings.write(str(idx) + ',' + str(percent) + '\n')
+#            print(e)
+#        count += 1
+#    idx += 1
+#    
+#print('number of files with bulding to area ratio > ' + str(percent_threshold), count)
+#print('percentage of files with bulding to area ratio > ' + str(percent_threshold), count / len(lines))
+
+#f_ptr_error_Exception.write(str(datetime.now()) + ', last index: ' + str(idx) + '\n')
+#f_ptr_error_Exception.write('number of OSM files exported: ' + str(count) + '\n')
+
+## close files
+#f_ptr_error_Exception.close()
+#f_ptr_error_IdxAndPercentBuildings.close()
+#f_ptr_HeightAtOrigin.close()
+
+#print('\nDONE\n\n\n\n\n')
