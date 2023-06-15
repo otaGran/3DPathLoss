@@ -6,6 +6,7 @@ import sys
 import os
 from datetime import datetime
 import time
+import uuid
 
 from PIL import Image
 import numpy as np
@@ -155,24 +156,18 @@ def add_plane(material_name, size=1100):
     return
 
 
-def change_material_names_and_export(wall_name, roof_name, f_path):
+def change_material_names_and_export(wall_name, roof_name, f_path, outer_idx):
     obj_names = [obj.name for obj in list(bpy.data.objects)]
     if len(obj_names) <= 2:
         return 1
-    
-#    print(obj_names)
+
     obj_names = []
-    map_name = ''
     for obj in list(bpy.data.objects):
         if 'Camera' not in obj.name and 'Terrain' not in obj.name and 'osm_buildings' not in obj.name:
             obj_names.append(obj.name)
-        if '.osm' in obj.name:
-            map_name = obj.name
     
     # check that there's more than one object
-#    print(list(bpy.data.objects))
     if len(list(bpy.data.objects)) >= 1:
-#        print(bpy.data.objects[obj_names[-1]])
         # set wall
         bpy.data.objects[obj_names[-1]].active_material_index = 0
         bpy.data.objects[obj_names[-1]].active_material.name = wall_name
@@ -181,11 +176,9 @@ def change_material_names_and_export(wall_name, roof_name, f_path):
         bpy.data.objects[obj_names[-1]].active_material.name = roof_name
     else:
         raise Exception("There are no OSM building objects in this Scene Collection")
-    # suppress and then turn on terminal output
-#    sys.stdout, sys.stderr = os.devnull, os.devnull
     # export
-    bpy.ops.export_scene.mitsuba(filepath=f_path, axis_forward='Y', axis_up='Z')
-#    sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
+    if outer_idx != -1:
+        bpy.ops.export_scene.mitsuba(filepath=f_path, axis_forward='Y', axis_up='Z')
     return 0
 
 
@@ -239,12 +232,8 @@ def terrain_to_png(terrain_img_path, f_ptr, outer_idx, save='n', normalise_to_25
                 raise Exception('terrain_to_png Did not get the correct row_len and col_len')
             
         terrain_img_arr = np.zeros((num_y, num_x))
-        
         print(num_x, num_y, num_x*num_y, len(vertices))
-#        for idx, vert in enumerate(vertices):
-#            print(vert.co.z)
-#            if idx == num_x:
-#                break
+
         for row in range(num_y):  # iterate through y, i.e. rows
             terrain_img_arr[row, :] = [vertices[col].co.z for col in range(row*num_x, (row+1)*num_x, 1)]
 
@@ -255,8 +244,8 @@ def terrain_to_png(terrain_img_path, f_ptr, outer_idx, save='n', normalise_to_25
         # this converts float32 to png (int8)
 #        if terrain_img.mode != 'L':
 #            terrain_img = terrain_img.convert('L')
-        
-        terrain_img.save(terrain_img_path)
+        if outer_idx != -1:
+            terrain_img.save(terrain_img_path)
 
     bpy.data.objects["Terrain"].select_set(False)
     return min_x, max_x, min_y, max_y
@@ -368,17 +357,15 @@ def calc_totalOSM_above_thresh(perc, text_lines):
     return c
 
 
-def run(maxLon, minLon, maxLat, minLat, idx, f_ptr_Exception=f_ptr_error_Exception, f_ptr_height=f_ptr_HeightAtOrigin):
-#    bpy.ops.wm.read_factory_settings(use_empty=True)
-    
-#    bpy.ops.read_homefile(filepath='/Applications/Blender.app/Contents/Resources/3.3/scripts/startup/bl_app_templates_system/OSM/startup.blend')
-#    bpy.ops.wm.read_userpref()
+def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, f_ptr_Exception=f_ptr_error_Exception, f_ptr_height=f_ptr_HeightAtOrigin):
+    # bpy.ops.wm.read_userpref()
     delete_all_in_collection()
 
     # should follow maxLon, minLon, maxLat, minLat
     diff = 0.0015
     loc_args_dict = {'maxLon': maxLon+diff, 'minLon': minLon-diff, 'maxLat': maxLat+diff, 'minLat': minLat-diff}
 
+    # do not add plane. Instead, add terrain
     add_terrain(material_name='itu_concrete', **loc_args_dict)
 
     loc_args_dict = {'maxLon': maxLon, 'minLon': minLon, 'maxLat': maxLat, 'minLat': minLat}
@@ -390,30 +377,33 @@ def run(maxLon, minLon, maxLat, minLat, idx, f_ptr_Exception=f_ptr_error_Excepti
     # download from server
     add_osm(**loc_args_dict, from_file='n', osmFilepath=None)
 
-    # do not add plane. Instead, add terrain
-    #add_plane(material_name='itu_concrete', size=1100)
-
     # path of xml file which would be exported in change_material_names_and_export
-    i = str(int(idx))
-    abs_path = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_xml_files/' + i + '/' + i + '.xml'
+    i = str(int(run_idx))
+    uuid_run = uuid.uuid4()
+    save_name = i + '_' + str(uuid_run)
 
-    ret = change_material_names_and_export(wall_name='itu_brick', roof_name='itu_plasterboard', f_path=abs_path)
+    # change_material_names_and_export WRITES the XML file as well as the Meshes
+    export_path = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_xml_files/' + save_name + '/' + save_name + '.xml'
+    ret = change_material_names_and_export(wall_name='itu_brick', roof_name='itu_plasterboard', f_path=export_path, outer_idx=run_idx)
     if ret != 0:
         return
-    
-    terrainImgPATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_terrain_img/' + i + '.tiff'
-    terrain_limits = terrain_to_png(terrain_img_path=terrainImgPATH, save='y', outer_idx=idx, f_ptr=f_ptr_Exception)
-    
+
+    # terrain_limits WRITES the terrain height information as tiff
+    terrainImgPATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_terrain_img/' + save_name + '.tiff'
+    terrain_limits = terrain_to_png(terrain_img_path=terrainImgPATH, save='y', outer_idx=run_idx, f_ptr=f_ptr_Exception)
+
     height_at_origin = get_height_at_origin(terrain_limits, camera_height=2000, camera_orthoScale=2000)
-    f_ptr_height.write(str(height_at_origin) + '\n')
+    if run_idx != -1:
+        f_ptr_height.write('({:f},{:f},{:f},{:f}),{:f},{:.1f},'.format(minLon, maxLat, maxLon, minLat, buildingToAreaRatio, height_at_origin) + save_name + '\n')
+
     delete_terrain_and_osm_files()
     return
 
 
 ## running Duke (this is run to overcome error in terrain_to_png on first run of run())
-maxLon, minLon, maxLat, minLat = -78.9340, -78.9426, 36.0036, 35.9965
+maxLonOut, minLonOut, maxLatOut, minLatOut = -78.9340, -78.9426, 36.0036, 35.9965
 
-run(maxLon, minLon, maxLat, minLat, idx=-1)
+run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=None, run_idx=-1)
 
 loc_fPtr = open('/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res.txt', 'r')
 lines = loc_fPtr.readlines()
@@ -429,17 +419,15 @@ print('Numer of OSM with building to area ratio above ' + str(percent_threshold)
 idx = 0
 count = 0
 for line in lines:
-    if idx > 3:
-        break
     line = line.replace('(', '')
     line = line.replace(')', '')
     line = line.replace('\n', '')
     line = line.split(',')
     # file format: minLon, maxLat, maxLon, minLat
-    minLon, maxLat, maxLon, minLat, percent = [float(l) for l in line]
+    minLonOut, maxLatOut, maxLonOut, minLatOut, percent = [float(l) for l in line]
     if percent > percent_threshold:
         try:
-            run(maxLon, minLon, maxLat, minLat, idx)
+            run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=percent, run_idx=idx)
         except Exception as e:
             f_ptr_error_Exception.write(str(datetime.now()) + '\n')
             f_ptr_error_Exception.write(str(idx) + ',' + str(percent) + ',' + str(e) + '\n')
