@@ -187,7 +187,9 @@ def change_material_names_and_export(wall_name, roof_name, f_path, outer_idx):
             obj_names.append(obj.name)
     
     # check that there's more than one object
-    if len(list(bpy.data.objects)) >= 1:
+    if len(list(bpy.data.objects)) < 1:
+        raise Exception("There are no OSM building objects in this Scene Collection")
+    else:
         mat_wall = bpy.data.materials.get(wall_name)
         if mat_wall is None:
             bpy.data.materials.new(name=wall_name)
@@ -198,12 +200,6 @@ def change_material_names_and_export(wall_name, roof_name, f_path, outer_idx):
             bpy.data.materials.new(name=roof_name)
 
         for obj_name in obj_names:
-           # bpy.data.objects[obj_name].active_material_index = 0
-           # bpy.data.objects[obj_name].active_material.name = wall_name
-           #
-           # bpy.data.objects[obj_name].active_material_index = 1
-           # bpy.data.objects[obj_name].active_material.name = roof_name
-
             obj_data = bpy.data.objects[obj_name].data
 
             bpy.data.objects[obj_name].active_material_index = 0
@@ -217,56 +213,19 @@ def change_material_names_and_export(wall_name, roof_name, f_path, outer_idx):
                 mat_destination = bpy.data.materials[roof_name]
                 mat_source = bpy.data.materials[bpy.data.objects[obj_name].active_material.name]
                 replace_material(obj_data, mat_source, mat_destination)
-
+                # replace mat_source with mat_destination
             if len(list(obj_data.materials)) > 2:
                 for jjj in range(2, len(list(obj_data.materials))):
                     bpy.data.objects[obj_name].active_material_index = jjj
                     bpy.ops.object.material_slot_remove()
 
-
-        
-        # # set wall
-        # bpy.data.objects[obj_names[-1]].active_material_index = 0
-        # bpy.data.objects[obj_names[-1]].active_material.name = wall_name
-        # # set roof
-        # bpy.data.objects[obj_names[-1]].active_material_index = 1
-        # bpy.data.objects[obj_names[-1]].active_material.name = roof_name
-        
-
-
-#        for obj_name in obj_names:
-#            obj_inner = bpy.data.objects[obj_name]
-#            for mat_slot in obj_inner.material_slots:
-#                mat_inner = mat_slot.material
-#                print(mat_slot.link)
-
-
-
-        # mats = bpy.data.materials
-        # 
-        # for obj in bpy.data.objects:
-        #     for slt in obj.material_slots:
-        #         part = slt.name.rpartition('.')
-        #         if part[2].isnumeric() and part[0] in mats:
-        #             slt.material = mats.get(part[0])
-
-
-
-#    for obj in bpy.data.objects:
-#        for 
-
-
-
-
-    else:
-        raise Exception("There are no OSM building objects in this Scene Collection")
     # export
     if outer_idx != -1:
         bpy.ops.export_scene.mitsuba(filepath=f_path, axis_forward='Y', axis_up='Z')
     return 0
 
 
-def terrain_to_png(terrain_img_path, f_ptr, outer_idx, save='n', normalise_to_256='n'):
+def terrain_to_png(terrain_img_path, f_ptr, outer_idx, save='n', normalise_to_256='n', camera_height=2000, camera_orthoScale=2000):
     bpy.data.objects["Terrain"].select_set(True)
 
     # compute mesh and vertices from Terrain object
@@ -283,53 +242,82 @@ def terrain_to_png(terrain_img_path, f_ptr, outer_idx, save='n', normalise_to_25
     
     print('x min and max of terrain mesh: ', min_x, max_x)
     print('y min and max of terrain mesh: ', min_y, max_y)
-    
-    # compute number of rows and columns in the terrain vertices
-    # to do this, compute the difference array. Then, find the index
-    # of the first location where the difference is negative. 
-    # This index is the number of columns. This works because the vertices
-    # array for the terain lists vertices from top to bottom 
-    # and from left to right. 
-    dx = [mesh.vertices[i].co.x - mesh.vertices[i-1].co.x for i in range(1, len(vertices))]
-    
-    x_idx = -1
-    for idx, delt in enumerate(dx):
-        if delt < 0:
-            x_idx = idx
-            break
-    print(x_idx)
-    
+    add_camera_and_set(camera_height, camera_orthoScale)
+
     if save == 'y':
-        num_x = x_idx + 1
-        num_y = int(round(len(list(mesh.vertices)) / num_x))
+        terrain_depth = take_picture_and_get_depth()
+        r, c = terrain_depth.shape
+        print('\nterrainshape:', r, c)
+        min_rc = min([r, c])
+        terrain_depth = terrain_depth[int(r/2-min_rc/2):int(r/2+min_rc/2), int(c/2-min_rc/2):int(c/2+min_rc/2)]
+        print(terrain_depth[0, :])
         
-        # weird Blender behaviour: this function fails on 
-        # initial run upon starting Blender, so I'm running
-        # a "test run" using idx = -1 to clear up this stuff
-        if num_x * num_y != len(vertices):
-            if outer_idx == -1:
-                f_ptr.write('Exception at -1 for test run, which is expected\n')
-            else:
-                print('\n\n incorrect')
-                print('row, col: ' + str(num_y), str(num_x) + '\n')
-                print('what the size should be:', str(len(vertices)) + '\n')
-                raise Exception('terrain_to_png Did not get the correct row_len and col_len')
-            
-        terrain_img_arr = np.zeros((num_y, num_x))
-        print(num_x, num_y, num_x*num_y, len(vertices))
-
-        for row in range(num_y):  # iterate through y, i.e. rows
-            terrain_img_arr[row, :] = [vertices[col].co.z for col in range(row*num_x, (row+1)*num_x, 1)]
-
-        if normalise_to_256 == 'y':
-            terrain_img_arr = normalise_to_png(terrain_img_arr, 256)
-        terrain_img = Image.fromarray(terrain_img_arr)
-
-        # this converts float32 to png (int8)
-#        if terrain_img.mode != 'L':
-#            terrain_img = terrain_img.convert('L')
+        terrain_img = Image.fromarray(terrain_depth)
         if outer_idx != -1:
             terrain_img.save(terrain_img_path)
+    """
+        Nothing in this function after line 248 works. Need new method.
+        i.e., take a photo
+    """
+#    # compute number of rows and columns in the terrain vertices
+#    # to do this, compute the difference array. Then, find the index
+#    # of the first location where the difference is negative. 
+#    # This index is the number of columns. This works because the vertices
+#    # array for the terain lists vertices from top to bottom 
+#    # and from left to right. 
+#    dx = [mesh.vertices[i].co.x - mesh.vertices[i-1].co.x for i in range(1, len(vertices))]
+#    
+#    vertices_y = [mesh.vertices[i].co.y for i in range(1, len(vertices))]
+#    sort_by_y = np.argsort(vertices_y)
+#    vertices_y = np.asarray(vertices_y)[sort_by_y]
+#    initial_y_val = vertices_y[0]
+#    
+#    y_idx = -1
+#    for lll in range(len(vertices_y)):
+#        if vertices_y[lll] != initial_y_val:
+#            continue
+#        y_idx = lll
+##    x_idx = -1
+##    for idx, delt in enumerate(dx):
+##        if delt < 0:
+##            x_idx = idx
+##            break
+##    print(x_idx)
+#    
+#    
+#    print(vertices_y)
+##    print(vertices_x[0:50])
+#    if save == 'y':
+#        num_x = y_idx
+#        num_y = int(round(len(list(mesh.vertices)) / num_x))
+#        
+#        # weird Blender behaviour: this function fails on 
+#        # initial run upon starting Blender, so I'm running
+#        # a "test run" using idx = -1 to clear up this stuff
+#        if num_x * num_y != len(vertices):
+#            if outer_idx == -1:
+#                f_ptr.write('Exception at -1 for test run, which is expected\n')
+#            else:
+#                print('\n\n incorrect')
+#                print('row, col: ' + str(num_y), str(num_x) + '\n')
+#                print('what the size should be:', str(len(vertices)) + '\n')
+#                raise Exception('terrain_to_png Did not get the correct row_len and col_len')
+#            
+#        terrain_img_arr = np.zeros((num_y, num_x))
+#        print(num_x, num_y, num_x*num_y, len(vertices))
+
+#        for row in range(num_y):  # iterate through y, i.e. rows
+#            terrain_img_arr[row, :] = [vertices[col].co.z for col in range(row*num_x, (row+1)*num_x, 1)]
+
+#        if normalise_to_256 == 'y':
+#            terrain_img_arr = normalise_to_png(terrain_img_arr, 256)
+#        terrain_img = Image.fromarray(terrain_img_arr)
+
+#        # this converts float32 to png (int8)
+##        if terrain_img.mode != 'L':
+##            terrain_img = terrain_img.convert('L')
+#        if outer_idx != -1:
+#            terrain_img.save(terrain_img_path)
 
     bpy.data.objects["Terrain"].select_set(False)
     return min_x, max_x, min_y, max_y
@@ -341,8 +329,8 @@ def get_depth():
     """
     z = bpy.data.images['Viewer Node']
     w, h = z.size
-    dmap = np.array(z.pixels[:], dtype=np.float32) # convert to numpy array
-    dmap = np.reshape(dmap, (h, w, 4))[:,:,0]
+    dmap = np.array(z.pixels[:], dtype=np.float32)  # convert to numpy array
+    dmap = np.reshape(dmap, (h, w, 4))[:, :, 0]
     dmap = np.rot90(dmap, k=2)
     dmap = np.fliplr(dmap)
     return dmap
@@ -356,47 +344,56 @@ def clear_compositing_nodes():
     return
 
 
-def get_height_at_origin(terrainLim, camera_height=2000, camera_orthoScale=2000, normalise_to_256='n'):
-    min_x, max_x, min_y, max_y = terrainLim
-    assert min_x < max_x and min_y < max_y
-    # add a camera and link it to scene
+def add_camera_and_set(camera_height, camera_orthoScale):
     camera_data = bpy.data.cameras.new(name='Camera')
     camera_object = bpy.data.objects.new('Camera', camera_data)
     bpy.context.scene.collection.objects.link(camera_object)
-    
     curr_camera = bpy.data.cameras["Camera"]
-    
+
     camera_object.location[2] = camera_height  # setting camera height
     curr_camera.type = 'ORTHO'  # setting camera type
     curr_camera.clip_start = 0.1  # setting clipping
     curr_camera.clip_end = camera_height * 5
     curr_camera.ortho_scale = camera_orthoScale  # setting camera scale
     curr_camera.dof.use_dof = False  # do not use, this makes the photo misty
-#    curr_camera.track_axis = '-Z'
-#    curr_camera.up_axis = 'Y'
-    
+    #    curr_camera.track_axis = '-Z'
+    #    curr_camera.up_axis = 'Y'
+    return
+
+
+def take_picture_and_get_depth():
     bpy.context.scene.camera = bpy.data.objects['Camera']
-    
+
     # enable z data to be passed and use nodes for compositing
     bpy.data.scenes['Scene'].view_layers["ViewLayer"].use_pass_z = True
     bpy.data.scenes['Scene'].use_nodes = True
-    
+
     tree = bpy.data.scenes['Scene'].node_tree
-    
+
     # clear nodes
     clear_compositing_nodes()
-    
+
     image_node = tree.nodes.new(type='CompositorNodeRLayers')
     viewer_node = tree.nodes.new(type='CompositorNodeViewer')
     viewer_node.location = 400, 0
-    
+
     tree.links.new(image_node.outputs["Depth"], viewer_node.inputs['Image'])
-    
+
     tree.nodes['Render Layers'].layer = 'ViewLayer'
-    
+
     bpy.ops.render.render(layer='ViewLayer')
 
     depth = get_depth()
+    return get_depth()
+
+
+def get_height_at_origin(terrainLim, camera_height=2000, camera_orthoScale=2000, normalise_to_256='n'):
+    min_x, max_x, min_y, max_y = terrainLim
+    assert min_x < max_x and min_y < max_y
+    # add a camera and link it to scene
+    # camera_object = add_camera_and_set(camera_height, camera_orthoScale)
+
+    depth = take_picture_and_get_depth()
     select_not_2D = depth > 65500
     depth[select_not_2D] = 2000
     
@@ -485,7 +482,7 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, f_ptr_Exce
 
         # terrain_limits WRITES the terrain height information as tiff
         terrainImgPATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_terrain_img/' + save_name + '.tiff'
-        terrain_limits = terrain_to_png(terrain_img_path=terrainImgPATH, save='y', outer_idx=run_idx, f_ptr=f_ptr_Exception)
+        terrain_limits = terrain_to_png(terrain_img_path=terrainImgPATH, save='y', outer_idx=run_idx, f_ptr=f_ptr_Exception, camera_height=2000, camera_orthoScale=2000)
 
         height_at_origin = get_height_at_origin(terrain_limits, camera_height=2000, camera_orthoScale=2000)
         if run_idx != -1:
@@ -500,9 +497,32 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, f_ptr_Exce
 # running lines[1626]
 loc_fPtr = open('/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res.txt', 'r')
 lines = loc_fPtr.readlines()
-minLonOut, maxLatOut, maxLonOut, minLatOut, ratio = get_floats_from_coordsFile(lines[1626])
-run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=ratio, run_idx=1626)
-print(ratio)
+minLonOut, maxLatOut, maxLonOut, minLatOut, ratio = get_floats_from_coordsFile(lines[2109])
+run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=ratio, run_idx=2109)
+print(ratio, '\nDONE\n\n\n')
+
+
+
+
+
+
+
+
+
+#loc_fPtr = open('/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res.txt', 'r')
+#lines = loc_fPtr.readlines()
+#minLonOut, maxLatOut, maxLonOut, minLatOut, ratio = get_floats_from_coordsFile(lines[2109])
+
+#print(maxLatOut, minLonOut)
+#print(minLatOut, minLonOut)
+#print(maxLatOut, maxLonOut)
+#print(minLatOut, maxLonOut)
+
+
+
+
+
+
 
 
 
