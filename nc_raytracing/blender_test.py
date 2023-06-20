@@ -244,80 +244,19 @@ def terrain_to_png(terrain_img_path, f_ptr, outer_idx, save='n', normalise_to_25
     print('y min and max of terrain mesh: ', min_y, max_y)
     add_camera_and_set(camera_height, camera_orthoScale)
 
-    if save == 'y':
+    if save == 'y' and outer_idx != -1:
         terrain_depth = take_picture_and_get_depth()
         r, c = terrain_depth.shape
         print('\nterrainshape:', r, c)
         min_rc = min([r, c])
+        # photo should be 1080x1920, so make it into 1080x1920
         terrain_depth = terrain_depth[int(r/2-min_rc/2):int(r/2+min_rc/2), int(c/2-min_rc/2):int(c/2+min_rc/2)]
+        # transform into height above xy plane in meters
+        terrain_depth = camera_height - terrain_depth
         print(terrain_depth[0, :])
-        
         terrain_img = Image.fromarray(terrain_depth)
         if outer_idx != -1:
             terrain_img.save(terrain_img_path)
-    """
-        Nothing in this function after line 248 works. Need new method.
-        i.e., take a photo
-    """
-#    # compute number of rows and columns in the terrain vertices
-#    # to do this, compute the difference array. Then, find the index
-#    # of the first location where the difference is negative. 
-#    # This index is the number of columns. This works because the vertices
-#    # array for the terain lists vertices from top to bottom 
-#    # and from left to right. 
-#    dx = [mesh.vertices[i].co.x - mesh.vertices[i-1].co.x for i in range(1, len(vertices))]
-#    
-#    vertices_y = [mesh.vertices[i].co.y for i in range(1, len(vertices))]
-#    sort_by_y = np.argsort(vertices_y)
-#    vertices_y = np.asarray(vertices_y)[sort_by_y]
-#    initial_y_val = vertices_y[0]
-#    
-#    y_idx = -1
-#    for lll in range(len(vertices_y)):
-#        if vertices_y[lll] != initial_y_val:
-#            continue
-#        y_idx = lll
-##    x_idx = -1
-##    for idx, delt in enumerate(dx):
-##        if delt < 0:
-##            x_idx = idx
-##            break
-##    print(x_idx)
-#    
-#    
-#    print(vertices_y)
-##    print(vertices_x[0:50])
-#    if save == 'y':
-#        num_x = y_idx
-#        num_y = int(round(len(list(mesh.vertices)) / num_x))
-#        
-#        # weird Blender behaviour: this function fails on 
-#        # initial run upon starting Blender, so I'm running
-#        # a "test run" using idx = -1 to clear up this stuff
-#        if num_x * num_y != len(vertices):
-#            if outer_idx == -1:
-#                f_ptr.write('Exception at -1 for test run, which is expected\n')
-#            else:
-#                print('\n\n incorrect')
-#                print('row, col: ' + str(num_y), str(num_x) + '\n')
-#                print('what the size should be:', str(len(vertices)) + '\n')
-#                raise Exception('terrain_to_png Did not get the correct row_len and col_len')
-#            
-#        terrain_img_arr = np.zeros((num_y, num_x))
-#        print(num_x, num_y, num_x*num_y, len(vertices))
-
-#        for row in range(num_y):  # iterate through y, i.e. rows
-#            terrain_img_arr[row, :] = [vertices[col].co.z for col in range(row*num_x, (row+1)*num_x, 1)]
-
-#        if normalise_to_256 == 'y':
-#            terrain_img_arr = normalise_to_png(terrain_img_arr, 256)
-#        terrain_img = Image.fromarray(terrain_img_arr)
-
-#        # this converts float32 to png (int8)
-##        if terrain_img.mode != 'L':
-##            terrain_img = terrain_img.convert('L')
-#        if outer_idx != -1:
-#            terrain_img.save(terrain_img_path)
 
     bpy.data.objects["Terrain"].select_set(False)
     return min_x, max_x, min_y, max_y
@@ -345,6 +284,8 @@ def clear_compositing_nodes():
 
 
 def add_camera_and_set(camera_height, camera_orthoScale):
+    # note: the camera is slightly "thinner" than the terrain. 
+    # Increase  camera_orthoScale  to increase the area captured.
     camera_data = bpy.data.cameras.new(name='Camera')
     camera_object = bpy.data.objects.new('Camera', camera_data)
     bpy.context.scene.collection.objects.link(camera_object)
@@ -448,7 +389,7 @@ def get_floats_from_coordsFile(line):
     return minLon, maxLat, maxLon, minLat, per
 
 
-def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, f_ptr_Exception=f_ptr_error_Exception, f_ptr_height=f_ptr_HeightAtOrigin):
+def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, f_ptr_Exception=f_ptr_error_Exception, f_ptr_height=f_ptr_HeightAtOrigin, use_path_osm='n'):
     try:
         # bpy.ops.wm.read_userpref()
         delete_all_in_collection()
@@ -461,13 +402,15 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, f_ptr_Exce
         add_terrain(material_name='itu_concrete', **loc_args_dict)
 
         loc_args_dict = {'maxLon': maxLon, 'minLon': minLon, 'maxLat': maxLat, 'minLat': minLat}
-
+        
         # use already-downloaded osm
-    #    osm_f_path = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_download_files/osm/map.osm'
-    #    add_osm(**loc_args_dict, from_file='y', osmFilepath=osm_f_path)
-
-        # download from server
-        add_osm(**loc_args_dict, from_file='n', osmFilepath=None)
+        if use_path_osm == 'y':
+            osm_f_path = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_download_files/osm/map.osm'
+            add_osm(**loc_args_dict, from_file='y', osmFilepath=osm_f_path)
+        
+        elif use_path_osm == 'n':
+            # download from server
+            add_osm(**loc_args_dict, from_file='n', osmFilepath=None)
 
         # path of xml file which would be exported in change_material_names_and_export
         i = str(int(run_idx))
@@ -481,6 +424,7 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, f_ptr_Exce
             return
 
         # terrain_limits WRITES the terrain height information as tiff
+        # increase camera_orthoScale to increase image size.
         terrainImgPATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_terrain_img/' + save_name + '.tiff'
         terrain_limits = terrain_to_png(terrain_img_path=terrainImgPATH, save='y', outer_idx=run_idx, f_ptr=f_ptr_Exception, camera_height=2000, camera_orthoScale=2000)
 
@@ -494,13 +438,12 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, f_ptr_Exce
     return
 
 
-# running lines[1626]
-loc_fPtr = open('/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res.txt', 'r')
-lines = loc_fPtr.readlines()
-minLonOut, maxLatOut, maxLonOut, minLatOut, ratio = get_floats_from_coordsFile(lines[2109])
-run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=ratio, run_idx=2109)
-print(ratio, '\nDONE\n\n\n')
-
+## running lines[1626]
+#loc_fPtr = open('/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res.txt', 'r')
+#lines = loc_fPtr.readlines()
+#minLonOut, maxLatOut, maxLonOut, minLatOut, ratio = get_floats_from_coordsFile(lines[2109])
+#run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=ratio, run_idx=2109)
+#print(ratio, '\nDONE\n\n\n')
 
 
 
@@ -526,51 +469,51 @@ print(ratio, '\nDONE\n\n\n')
 
 
 
-### running Duke (this is run to overcome error in terrain_to_png on first run of run())
-#maxLonOut, minLonOut, maxLatOut, minLatOut = -78.9340, -78.9426, 36.0036, 35.9965
+## running Duke (this is run to overcome error in terrain_to_png on first run of run())
+maxLonOut, minLonOut, maxLatOut, minLatOut = -78.9340, -78.9426, 36.0036, 35.9965
 
-#run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=None, run_idx=-1)
+run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=None, run_idx=-1)
 
-#loc_fPtr = open('/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res.txt', 'r')
-#lines = loc_fPtr.readlines()
-#print(len(lines))
+loc_fPtr = open('/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res.txt', 'r')
+lines = loc_fPtr.readlines()
+print(len(lines))
 
-#f_ptr_error_Exception.write('\n\n\n-------\nRun started at: ' + str(datetime.now()) + '\n')
+f_ptr_error_Exception.write('\n\n\n-------\nRun started at: ' + str(datetime.now()) + '\n')
 
-#percent_threshold = 0.1
+percent_threshold = 0.1
 
-#num = calc_totalOSM_above_thresh(perc=percent_threshold, text_lines=lines)
-#print('Numer of OSM with building to area ratio above ' + str(percent_threshold) + ' is', str(num))
+num = calc_totalOSM_above_thresh(perc=percent_threshold, text_lines=lines)
+print('Numer of OSM with building to area ratio above ' + str(percent_threshold) + ' is', str(num))
 
-#idx = 0
-#count = 0
-#for line in lines:
-#    line = line.replace('(', '')
-#    line = line.replace(')', '')
-#    line = line.replace('\n', '')
-#    line = line.split(',')
-#    # file format: minLon, maxLat, maxLon, minLat
-#    minLonOut, maxLatOut, maxLonOut, minLatOut, percent = [float(l) for l in line]
-#    if percent > percent_threshold:
-#        try:
-#            run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=percent, run_idx=idx)
-#        except Exception as e:
-#            f_ptr_error_Exception.write(str(datetime.now()) + '\n')
-#            f_ptr_error_Exception.write(str(idx) + ',' + str(percent) + ',' + str(e) + '\n')
-#            f_ptr_error_IdxAndPercentBuildings.write(str(idx) + ',' + str(percent) + '\n')
-#            print(e)
-#        count += 1
-#    idx += 1
-#    
-#print('number of files with bulding to area ratio > ' + str(percent_threshold), count)
-#print('percentage of files with bulding to area ratio > ' + str(percent_threshold), count / len(lines))
+idx = 0
+count = 0
+for line in lines:
+    line = line.replace('(', '')
+    line = line.replace(')', '')
+    line = line.replace('\n', '')
+    line = line.split(',')
+    # file format: minLon, maxLat, maxLon, minLat
+    minLonOut, maxLatOut, maxLonOut, minLatOut, percent = [float(l) for l in line]
+    if percent > percent_threshold:
+        try:
+            run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=percent, run_idx=idx)
+        except Exception as e:
+            f_ptr_error_Exception.write(str(datetime.now()) + '\n')
+            f_ptr_error_Exception.write(str(idx) + ',' + str(percent) + ',' + str(e) + '\n')
+            f_ptr_error_IdxAndPercentBuildings.write(str(idx) + ',' + str(percent) + '\n')
+            print(e)
+        count += 1
+    idx += 1
+    
+print('number of files with bulding to area ratio > ' + str(percent_threshold), count)
+print('percentage of files with bulding to area ratio > ' + str(percent_threshold), count / len(lines))
 
-#f_ptr_error_Exception.write(str(datetime.now()) + ', last index: ' + str(idx) + '\n')
-#f_ptr_error_Exception.write('number of OSM files exported: ' + str(count) + '\n')
+f_ptr_error_Exception.write(str(datetime.now()) + ', last index: ' + str(idx) + '\n')
+f_ptr_error_Exception.write('number of OSM files exported: ' + str(count) + '\n')
 
-## close files
-#f_ptr_error_Exception.close()
-#f_ptr_error_IdxAndPercentBuildings.close()
-#f_ptr_HeightAtOrigin.close()
+# close files
+f_ptr_error_Exception.close()
+f_ptr_error_IdxAndPercentBuildings.close()
+f_ptr_HeightAtOrigin.close()
 
-#print('\nDONE\n\n\n\n\n')
+print('\nDONE\n\n\n\n\n')
