@@ -432,7 +432,6 @@ def calc_totalOSM_above_thresh(perc, text_lines):
                 c += 1
         return c
     except Exception as e:
-        return -1
         raise e
 
 
