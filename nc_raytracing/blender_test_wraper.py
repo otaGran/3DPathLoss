@@ -61,7 +61,9 @@ if __name__ == '__main__':
 
                 # print(futures[-3].result())
 
-            # pbar.update(1)
+            # pbar.updae(1)
+    wait(futures)
+
 
 # print('number of files with bulding to area ratio > ' + str(percent_threshold), count)
 # print('percentage of files with bulding to area ratio > ' + str(percent_threshold), count / len(lines))
