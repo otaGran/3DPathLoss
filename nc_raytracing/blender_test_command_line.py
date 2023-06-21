@@ -16,10 +16,12 @@ if '--' in sys.argv:
     argv = sys.argv[sys.argv.index('--')+1:]
 parser = argparse.ArgumentParser()
 parser.add_argument('-i', '--idx', type=int, required=True)
-parser.add_argument('-r', '--maxLon', type=float, required=True)
 parser.add_argument('-l', '--minLon', type=float, required=True)
 parser.add_argument('-t', '--maxLat', type=float, required=True)
+parser.add_argument('-r', '--maxLon', type=float, required=True)
 parser.add_argument('-b', '--minLat', type=float, required=True)
+
+
 parser.add_argument('-o', '--building_to_area_ratio', type=float, required=True)
 
 args = parser.parse_known_args(argv)[0]
