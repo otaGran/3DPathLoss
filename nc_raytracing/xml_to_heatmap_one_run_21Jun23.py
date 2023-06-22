@@ -19,7 +19,7 @@ from sionna.rt import load_scene, Transmitter, Receiver, PlanarArray, Camera, Pa
     Parse arguments
 """
 parser = argparse.ArgumentParser()
-parser.add_argument('-h', '--height_file', type=str, required=True)
+parser.add_argument('-t', '--height_file', type=str, required=True)
 # extra_height is added to the height above the xy-plane of the terrain/building at the origin when
 # placing Tx and when calculating signal strength in the coverage_map function
 parser.add_argument('-e', '--extra_height', type=float, required=True)
@@ -27,6 +27,7 @@ parser.add_argument('-e', '--extra_height', type=float, required=True)
 parser.add_argument('-c', '--cm_cell_size', type=float, required=False, default=10)
 parser.add_argument('-b', '--BASE_PATH_BLENDER', type=str, required=False, default='/res/')
 parser.add_argument('-s', '--BASE_PATH_SIONNA', type=str, required=True)
+parser.add_argument('-n', '--outer_idx', type=int, required=True)
 args = parser.parse_args()
 # print('height file name: ', args.height_file)
 # print('extra height: ', args.extra_height)
@@ -142,5 +143,7 @@ def run_routine():
 
 try:
     run_routine()
+    print('index ' + str(args.outer_idx), args.height_file + ' DONE\n')
 except Exception as e:
+    print(e)
     raise e
