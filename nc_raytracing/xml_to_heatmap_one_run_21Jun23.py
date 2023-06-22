@@ -13,10 +13,27 @@ from sionna.rt import load_scene, Transmitter, Receiver, PlanarArray, Camera, Pa
 
 """
     Base path for the Blender files. The height files, pngs, and xml folders should be in BASE_PATH. 
-    Organisation: BASE_PATH/Blender_xml_files/, 
+    Organisation: BASE_PATH/Bl_terrain_img/, BASE_PATH/Bl_xml_files/, BASE_PATH/height_at_origin/, 
 """
+"""
+    Parse arguments
+"""
+parser = argparse.ArgumentParser()
+parser.add_argument('-h', '--height_file', type=str, required=True)
+# extra_height is added to the height above the xy-plane of the terrain/building at the origin when
+# placing Tx and when calculating signal strength in the coverage_map function
+parser.add_argument('-e', '--extra_height', type=float, required=True)
+# parser.add_argument('end', nargs='?', type=int, required=True)
+parser.add_argument('-c', '--cm_cell_size', type=float, required=False, default=10)
+parser.add_argument('-b', '--BASE_PATH_BLENDER', type=str, required=False, default='/res/')
+parser.add_argument('-s', '--BASE_PATH_SIONNA', type=str, required=True)
+args = parser.parse_args()
+# print('height file name: ', args.height_file)
+# print('extra height: ', args.extra_height)
+BASE_PATH = args.BASE_PATH_BLENDER
+BASE_PATH_SIONNA = args.BASE_PATH_SIONNA
+f_ptr_H = open(BASE_PATH + 'height_at_origin/' + args.height_file, 'r')
 
-BASE_PATH = 'Blender_stuff/'
 
 """
     Setting up the environment, including the GPUs
@@ -37,23 +54,6 @@ if gpus:
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 tf.random.set_seed(1) # Set global random seed for reproducibility
-
-
-"""
-    Parse arguments
-"""
-parser = argparse.ArgumentParser()
-parser.add_argument('-h', '--height_file', type=str, required=True)
-# extra_height is added to the height above the xy-plane of the terrain/building at the origin when
-# placing Tx and when calculating signal strength in the coverage_map function
-parser.add_argument('-e', '--extra_height', type=float, required=True)
-# parser.add_argument('end', nargs='?', type=int, required=True)
-parser.add_argument('-c', '--cm_cell_size', type=float, required=False, default=10)
-args = parser.parse_args()
-# print('height file name: ', args.height_file)
-# print('extra height: ', args.extra_height)
-f_ptr_H = open(args.height_file, 'r')
-
 
 
 def get_data_from_HeightFile(f_ptr_height):
@@ -77,8 +77,8 @@ def cm_routine(extra_height, f_ptr_height):
     try:
         _,_,_,_,_, height_at_origin, file_name = get_data_from_HeightFile(f_ptr_height=f_ptr_height)
         start_loc = time.time()
-        scene = load_scene(BASE_PATH + 'Blender_xml_files/' + file_name + '/' + file_name + '.xml')
-        print('load scene time: ', str(time.time() - start_loc))
+        scene = load_scene(BASE_PATH + 'Bl_xml_files/' + file_name + '/' + file_name + '.xml')
+        # print('load scene time: ', str(time.time() - start_loc))
         scene.tx_array = PlanarArray(num_rows=1,
                                   num_cols=1,
                                   vertical_spacing=0.5,
@@ -106,7 +106,7 @@ def cm_routine(extra_height, f_ptr_height):
         start_loc = time.time()
         cm = scene.coverage_map(max_depth=8, cm_center=[0, 0, height_at_origin+extra_height], cm_orientation=[0, 0, 0],
                                 cm_cell_size=[args.cm_cell_size, args.cm_cell_size], cm_size=[1000, 1000])
-        print('compute cm time: ', str(time.time() - start_loc))
+        # print('compute cm time: ', str(time.time() - start_loc))
         # Visualize coverage in preview
         # scene.preview(coverage_map=cm, resolution=[1000, 600])
         return cm, scene, file_name
@@ -132,7 +132,7 @@ def run_routine():
         # print('Calculating for index:', str(idx))
         coverage_map, scene, fName = cm_routine(extra_height=args.extra_height, f_ptr_height=f_ptr_H)
         # print(fName)
-        image_path = 'Sionna_coverage_maps/coverage_maps/' + fName + '.tiff'
+        image_path = BASE_PATH_SIONNA + fName + '.tiff'
         save_routine(coverage_map, image_path)
         # print('Cumulative time expended:', str(time.time() - start) + ' seconds\n\n')
         return
