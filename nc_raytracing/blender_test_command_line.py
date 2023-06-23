@@ -20,6 +20,7 @@ parser.add_argument('-l', '--minLon', type=float, required=True)
 parser.add_argument('-t', '--maxLat', type=float, required=True)
 parser.add_argument('-r', '--maxLon', type=float, required=True)
 parser.add_argument('-b', '--minLat', type=float, required=True)
+parser.add_argument('-d', '--decimate_factor', type=int, required=False, default=1)
 
 
 parser.add_argument('-o', '--building_to_area_ratio', type=float, required=True)
@@ -267,7 +268,20 @@ def change_material_names_and_export(wall_name, roof_name, f_path, outer_idx):
         raise e
 
 
-def terrain_to_png(outer_idx, save='n', camera_height=2000, camera_orthoScale=2000):
+def squarify_photo(arr):
+    try:
+        arr = np.asarray(arr)
+        rrr, ccc = arr.shape
+        min_rc = min([rrr, ccc])
+        return arr[int((rrr - min_rc) / 2):int((rrr + min_rc) / 2), int((ccc - min_rc) / 2):int((ccc + min_rc) / 2)]
+    except Exception as e:
+        raise e
+
+
+def terrain_to_png(outer_idx, save='n', camera_height=2000, camera_orthoScale=2000, decimate='n', decimate_factor=8):
+    """
+    The important part: returns terrain_height as an array and PIL.Image.
+    """
     try:
         bpy.data.objects["Terrain"].select_set(True)
 
@@ -275,7 +289,6 @@ def terrain_to_png(outer_idx, save='n', camera_height=2000, camera_orthoScale=20
         terrain_dg = bpy.context.evaluated_depsgraph_get()
         terrain_obj = bpy.context.object.evaluated_get(terrain_dg)
         mesh = terrain_obj.to_mesh(depsgraph=terrain_dg)
-        vertices = mesh.vertices
 
         # compute the boundaries of the terrain
         # min_x: top-left corner; min_y: bottom-right corner
@@ -289,26 +302,24 @@ def terrain_to_png(outer_idx, save='n', camera_height=2000, camera_orthoScale=20
 
         if save == 'y' and outer_idx != -1:
             terrain_depth = take_picture_and_get_depth()
-            r, c = terrain_depth.shape
-            print('\nterrainshape:', r, c)
-            min_rc = min([r, c])
-            # photo should be 1080x1920, so make it into 1080x1920
-            terrain_depth = terrain_depth[int(r / 2 - min_rc / 2):int(r / 2 + min_rc / 2),
-                            int(c / 2 - min_rc / 2):int(c / 2 + min_rc / 2)]
+
+            # make terrain_depth square
+            terrain_depth_square = squarify_photo(terrain_depth)
             # transform into height above xy plane in meters
-            terrain_depth = camera_height - terrain_depth
-            print(terrain_depth[0, :])
+            terrain_height = camera_height - terrain_depth_square
+            print(terrain_height[0, :])
 
             # decimate (I know that scipy can also do this) by a factor of 8
             # it is also proper to do it with scipy since the frequency
             # components are considered, but I can't be bothered
-            terrain_depth = terrain_depth[::8, ::8]
-            terrain_img = Image.fromarray(terrain_depth)
+            if decimate == 'y':
+                terrain_height = terrain_height[::decimate_factor, ::decimate_factor]
+            terrain_img = Image.fromarray(terrain_height)
             # convert to png format
             if terrain_img.mode != 'L':
                 terrain_img = terrain_img.convert('L')
             if outer_idx != -1:
-                return min_x, max_x, min_y, max_y, terrain_img
+                return min_x, max_x, min_y, max_y, terrain_height, terrain_img
                 # terrain_img.save(terrain_img_path)
 
         bpy.data.objects["Terrain"].select_set(False)
@@ -394,43 +405,31 @@ def take_picture_and_get_depth():
         raise e
 
 
-def get_height_at_origin(terrainLim, camera_height=2000, camera_orthoScale=2000, normalise_to_256='n'):
+def get_height_at_origin(terrain_lims, terrain_height, camera_height=2000, normalise_to_256='n',
+                         decimate='n', decimate_factor=8):
+    """
+    terrain_height must be of type(np.array) and values measure height from the xy plane
+    """
     try:
-        min_x, max_x, min_y, max_y, _ = terrainLim
+        min_x, max_x, min_y, max_y, _ = terrain_lims
         assert min_x < max_x and min_y < max_y
-        # add a camera and link it to scene
-        # camera_object = add_camera_and_set(camera_height, camera_orthoScale)
 
-        depth = take_picture_and_get_depth()
-        select_not_2D = depth > 65500
-        depth[select_not_2D] = 2000
+        depth = take_picture_and_get_depth()  # values that are greater than 65500 have inf depth
+        depth[depth > 65500] = 2000
 
         # get height at origin using a simple reflection
         roww, coll = depth.shape
-        height = camera_height - depth[int(round(roww / 2)), int(round(coll / 2))]
+        height_at_origin = camera_height - depth[int(round(roww / 2)), int(round(coll / 2))]
 
         if normalise_to_256 == 'y':
             depth = normalise_to_png(depth, 256)
-        depth_img = Image.fromarray(depth)
+        if decimate == 'y':
+            depth = depth[::decimate_factor, ::decimate_factor]
 
-        ## saving for illustrative purposes:
-        #    temp_path = '/Users/zeyuli/Desktop/temp_depth.png'
-        #    if depth_img.mode != 'L':
-        #        depth_img = depth_img.convert('L')
-
-        #    depth_img.save(temp_path)
-
-        # depth_flatten = depth.flatten()
-        #
-        # selection = np.asarray(np.copy(depth_flatten) < 65500)
-        #
-        # depth_final = depth_flatten[selection]
-        #
-        # print()
-        # print('min_depth: ', np.min(depth), '. max_depth: ', np.max(depth_final))
-        # bpy.data.objects["Camera"].select_set(False)
-        # print('Done with get_height_at_origin\n')
-        return height
+        height_arr = camera_height - depth
+        height_square = squarify_photo(height_arr)
+        building_height = height_square - terrain_height
+        return height_at_origin, Image.fromarray(building_height)
     except Exception as e:
         raise e
 
@@ -464,9 +463,12 @@ def get_floats_from_coordsFile(line):
         raise e
 
 
-def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio,
+def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_factor,
         use_path_osm='n'):
     try:
+        decimate = 'n'
+        if decimate_factor != 1:
+            decimate = 'y'
         # bpy.ops.wm.read_userpref()
         delete_all_in_collection()
 
@@ -486,12 +488,15 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio,
         # do not add plane. Instead, add terrain
         add_terrain(material_name='itu_concrete', **loc_args_dict)
 
-        # terrain_limits WRITES the terrain height information as tiff
+        # terrain_limits WRITES the terrain height information as png
         # increase camera_orthoScale to increase image size.
         terrainImgPATH = BASE_PATH + 'Bl_terrain_img/' + save_name + '.png'
+        buildingImgPATH = BASE_PATH + 'Bl_building_img/' + save_name + '.png'
         terrain_save = 'y'
+
+        # terrain_limits contains min_x, max_x, min_y, max_y, terrain_height, terrain_img
         terrain_limits = terrain_to_png(save=terrain_save, outer_idx=run_idx, camera_height=2000,
-                                        camera_orthoScale=2000)
+                                        camera_orthoScale=2000, decimate=decimate, decimate_factor=decimate_factor)
         # if terrain_save=='n' then terrainImg is not returned.
         print(len(terrain_limits))
         terrainImg = terrain_limits[-1]
@@ -514,13 +519,17 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio,
         if ret != 0:
             raise Exception('Not enough objects in scene for change_material_names_and_export.')
 
-        height_at_origin = get_height_at_origin(terrain_limits, camera_height=2000, camera_orthoScale=2000)
+        # building height is an image containing the building height and nothing else
+        height_at_origin, building_height_img = get_height_at_origin(terrain_limits, camera_height=2000,
+                                                                     terrain_height=terrain_limits[-2],
+                                                                     decimate=decimate, decimate_factor=decimate_factor)
         if run_idx != -1:
             f_ptr_HeightAtOrigin.write(
                 '({:f},{:f},{:f},{:f}),{:f},{:.1f},'.format(minLon, maxLat, maxLon, minLat, buildingToAreaRatio,
                                                             height_at_origin) + save_name + '\n')
             if terrain_save == 'y':
                 terrainImg.save(terrainImgPATH)
+                building_height_img.save(buildingImgPATH)
         delete_terrain_and_osm_files()
         f_ptr_HeightAtOrigin.close()
     except Exception as e:
@@ -529,6 +538,7 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio,
 
 
 try:
-    run(args.maxLon, args.minLon, args.maxLat, args.minLat, args.idx, args.building_to_area_ratio, use_path_osm='n')
+    run(args.maxLon, args.minLon, args.maxLat, args.minLat, args.idx, args.building_to_area_ratio,
+        decimate_factor=args.decimate_factor, use_path_osm='n')
 except Exception as e:
     raise e
