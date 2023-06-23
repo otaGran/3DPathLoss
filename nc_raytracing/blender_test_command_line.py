@@ -22,7 +22,8 @@ parser.add_argument('-r', '--maxLon', type=float, required=True)
 parser.add_argument('-b', '--minLat', type=float, required=True)
 parser.add_argument('-d', '--decimate_factor', type=int, required=False, default=1)
 parser.add_argument('-p', '--BASE_PATH', type=str, required=True)
-
+parser.add_argument('-u', '--BLENDER_OSM_DOWNLOAD_PATH', type=str, required=True)
+parser.add_argument('-n', '--idx_uuid', type=str, required=True)
 
 parser.add_argument('-o', '--building_to_area_ratio', type=float, required=True)
 
@@ -409,7 +410,7 @@ def get_height_at_origin(terrain_height, camera_height=2000, normalise_to_256='n
     """
     try:
         depth = take_picture_and_get_depth()  # values that are greater than 65500 have inf depth
-        depth[depth > 65500] = 2000
+        depth[depth > 65500] = camera_height
 
         # get height at origin using a simple reflection
         roww, coll = depth.shape
@@ -426,6 +427,17 @@ def get_height_at_origin(terrain_height, camera_height=2000, normalise_to_256='n
         return height_at_origin, building_height
     except Exception as e:
         raise e
+
+
+def get_height_buildings(loc_args_dict, from_file='n', osm_filepath=None, cam_ht=2000, cam_ortho_scale=2000):
+    # this should be called before most other functions in run()
+    add_osm(**loc_args_dict, from_file=from_file, osmFilepath=osm_filepath)
+    add_camera_and_set(camera_height=cam_ht, camera_orthoScale=cam_ortho_scale)
+    building_depth = take_picture_and_get_depth()
+    building_depth[building_depth > 65500] = cam_ht
+    building_depth_sqr = squarify_photo(building_depth)
+    building_ht_arr = cam_ht - building_depth_sqr
+    return building_ht_arr
 
 
 def calc_totalOSM_above_thresh(perc, text_lines):
@@ -465,11 +477,16 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
             decimate = 'y'
         # bpy.ops.wm.read_userpref()
         delete_all_in_collection()
+        loc_args_dict = {'maxLon': maxLon, 'minLon': minLon, 'maxLat': maxLat, 'minLat': minLat}
+        osm_f_path = args.BLENDER_OSM_DOWNLOAD_PATH + args.idx_uuid + '.osm'
+        building_ht_fixed = get_height_buildings(loc_args_dict, from_file=use_path_osm, osm_filepath=osm_f_path, cam_ht=2000, cam_ortho_scale=2000)
+        delete_all_in_collection()
 
         # path of xml file which would be exported in change_material_names_and_export
-        i = str(int(run_idx))
-        uuid_run = uuid.uuid4()
-        save_name = i + '_' + str(uuid_run)
+        # i = str(int(run_idx))
+        # uuid_run = uuid.uuid4()
+        # SAVE_NAMAE = i + '_' + str(uuid_run)
+        save_name = args.idx_uuid
 
         HeightAtOrigin_path = BASE_PATH + 'height_at_origin/' + save_name + '.txt'  # 'HeightAtOrigin.txt'
         f_ptr_HeightAtOrigin = open(HeightAtOrigin_path, 'w')
@@ -496,15 +513,8 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
         terrain_arr = terrain_limits[-1]
 
         loc_args_dict = {'maxLon': maxLon, 'minLon': minLon, 'maxLat': maxLat, 'minLat': minLat}
-
-        # use already-downloaded osm
-        if use_path_osm == 'y':
-            osm_f_path = BASE_PATH + 'Blender_download_files/osm/map.osm'
-            add_osm(**loc_args_dict, from_file='y', osmFilepath=osm_f_path)
-
-        elif use_path_osm == 'n':
-            # download from server
-            add_osm(**loc_args_dict, from_file='n', osmFilepath=None)
+        # use already-downloaded osm is only selected when both from_file=='y' and osmFilepath is not None
+        add_osm(**loc_args_dict, from_file=use_path_osm, osmFilepath=osm_f_path)
 
         # change_material_names_and_export WRITES the XML file as well as the Meshes
         export_path = BASE_PATH + 'Bl_xml_files/' + save_name + '/' + save_name + '.xml'
@@ -514,7 +524,8 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
             raise Exception('Not enough objects in scene for change_material_names_and_export.')
 
         # building height is an image containing the building height and nothing else
-        height_at_origin, building_height_arr = get_height_at_origin(camera_height=2000, terrain_height=terrain_arr,
+        # note: this function outputs wavy buildings, since the building height is constant even on top of terrain
+        height_at_origin, _ = get_height_at_origin(camera_height=2000, terrain_height=terrain_arr,
                                                                      decimate=decimate, decimate_factor=decimate_factor)
         if run_idx != -1:
             f_ptr_HeightAtOrigin.write(
@@ -522,7 +533,8 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
                                                             height_at_origin) + save_name + '\n')
             if terrain_save == 'y':
                 terrain_arr_int16 = terrain_arr.astype(np.int16)
-                building_height_arr_int16 = building_height_arr.astype(np.int16)
+                building_height_arr_int16 = building_ht_fixed.astype(np.int16)
+
                 np.save(terrainImgPATH, terrain_arr_int16)
                 np.save(buildingImgPATH, building_height_arr_int16)
                 # terrainImg.save(terrainImgPATH)
@@ -536,6 +548,6 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
 
 try:
     run(args.maxLon, args.minLon, args.maxLat, args.minLat, args.idx, args.building_to_area_ratio,
-        decimate_factor=args.decimate_factor, use_path_osm='n')
+        decimate_factor=args.decimate_factor, use_path_osm='y')
 except Exception as e:
     raise e
