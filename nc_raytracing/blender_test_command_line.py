@@ -21,13 +21,15 @@ parser.add_argument('-t', '--maxLat', type=float, required=True)
 parser.add_argument('-r', '--maxLon', type=float, required=True)
 parser.add_argument('-b', '--minLat', type=float, required=True)
 parser.add_argument('-d', '--decimate_factor', type=int, required=False, default=1)
+parser.add_argument('-p', '--BASE_PATH', type=str, required=True)
 
 
 parser.add_argument('-o', '--building_to_area_ratio', type=float, required=True)
 
 args = parser.parse_known_args(argv)[0]
 
-BASE_PATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Test_subprocess/'
+# this is the path where the results are stored (terrain_npy, building_npy, height files, Mitsuba_export)
+BASE_PATH = args.BASE_PATH  # '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res/'
 # error_path_IdxAndPercentBuildings = BASE_PATH + 'error_IdxAndPercentBuildings.txt'
 
 # this is actually a log.
@@ -482,8 +484,8 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
 
         # terrain_limits WRITES the terrain height information as png
         # increase camera_orthoScale to increase image size.
-        terrainImgPATH = BASE_PATH + 'Bl_terrain_img/' + save_name + '.npy'
-        buildingImgPATH = BASE_PATH + 'Bl_building_img/' + save_name + '.npy'
+        terrainImgPATH = BASE_PATH + 'Bl_terrain_npy/' + save_name + '.npy'
+        buildingImgPATH = BASE_PATH + 'Bl_building_npy/' + save_name + '.npy'
         terrain_save = 'y'
 
         # terrain_limits contains min_x, max_x, min_y, max_y, terrain_height
