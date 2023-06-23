@@ -36,7 +36,6 @@ BASE_PATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Test_subp
 # f_ptr_error_Exception = open(error_path_Exception, 'a')
 
 
-
 def install_package(package_name):
     try:
         # path to python.exe
@@ -278,9 +277,9 @@ def squarify_photo(arr):
         raise e
 
 
-def terrain_to_png(outer_idx, save='n', camera_height=2000, camera_orthoScale=2000, decimate='n', decimate_factor=8):
+def terrain_to_npy(outer_idx, save='n', camera_height=2000, camera_orthoScale=2000, decimate='n', decimate_factor=8):
     """
-    The important part: returns terrain_height as an array and PIL.Image.
+    The important part: returns terrain_height as np array.
     """
     try:
         bpy.data.objects["Terrain"].select_set(True)
@@ -314,13 +313,8 @@ def terrain_to_png(outer_idx, save='n', camera_height=2000, camera_orthoScale=20
             # components are considered, but I can't be bothered
             if decimate == 'y':
                 terrain_height = terrain_height[::decimate_factor, ::decimate_factor]
-            terrain_img = Image.fromarray(terrain_height)
-            # convert to png format
-            if terrain_img.mode != 'L':
-                terrain_img = terrain_img.convert('L')
             if outer_idx != -1:
-                return min_x, max_x, min_y, max_y, terrain_height, terrain_img
-                # terrain_img.save(terrain_img_path)
+                return min_x, max_x, min_y, max_y, terrain_height
 
         bpy.data.objects["Terrain"].select_set(False)
         return min_x, max_x, min_y, max_y
@@ -405,15 +399,13 @@ def take_picture_and_get_depth():
         raise e
 
 
-def get_height_at_origin(terrain_lims, terrain_height, camera_height=2000, normalise_to_256='n',
+def get_height_at_origin(terrain_height, camera_height=2000, normalise_to_256='n',
                          decimate='n', decimate_factor=8):
     """
     terrain_height must be of type(np.array) and values measure height from the xy plane
+    returns building_height numpy array
     """
     try:
-        min_x, max_x, min_y, max_y, _ = terrain_lims
-        assert min_x < max_x and min_y < max_y
-
         depth = take_picture_and_get_depth()  # values that are greater than 65500 have inf depth
         depth[depth > 65500] = 2000
 
@@ -429,7 +421,7 @@ def get_height_at_origin(terrain_lims, terrain_height, camera_height=2000, norma
         height_arr = camera_height - depth
         height_square = squarify_photo(height_arr)
         building_height = height_square - terrain_height
-        return height_at_origin, Image.fromarray(building_height)
+        return height_at_origin, building_height
     except Exception as e:
         raise e
 
@@ -477,7 +469,7 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
         uuid_run = uuid.uuid4()
         save_name = i + '_' + str(uuid_run)
 
-        HeightAtOrigin_path = BASE_PATH + save_name + '.txt'  # 'HeightAtOrigin.txt'
+        HeightAtOrigin_path = BASE_PATH + 'height_at_origin/' + save_name + '.txt'  # 'HeightAtOrigin.txt'
         f_ptr_HeightAtOrigin = open(HeightAtOrigin_path, 'w')
 
         # should follow maxLon, minLon, maxLat, minLat
@@ -490,16 +482,16 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
 
         # terrain_limits WRITES the terrain height information as png
         # increase camera_orthoScale to increase image size.
-        terrainImgPATH = BASE_PATH + 'Bl_terrain_img/' + save_name + '.png'
-        buildingImgPATH = BASE_PATH + 'Bl_building_img/' + save_name + '.png'
+        terrainImgPATH = BASE_PATH + 'Bl_terrain_img/' + save_name + '.npy'
+        buildingImgPATH = BASE_PATH + 'Bl_building_img/' + save_name + '.npy'
         terrain_save = 'y'
 
-        # terrain_limits contains min_x, max_x, min_y, max_y, terrain_height, terrain_img
-        terrain_limits = terrain_to_png(save=terrain_save, outer_idx=run_idx, camera_height=2000,
+        # terrain_limits contains min_x, max_x, min_y, max_y, terrain_height
+        terrain_limits = terrain_to_npy(save=terrain_save, outer_idx=run_idx, camera_height=2000,
                                         camera_orthoScale=2000, decimate=decimate, decimate_factor=decimate_factor)
         # if terrain_save=='n' then terrainImg is not returned.
         print(len(terrain_limits))
-        terrainImg = terrain_limits[-1]
+        terrain_arr = terrain_limits[-1]
 
         loc_args_dict = {'maxLon': maxLon, 'minLon': minLon, 'maxLat': maxLat, 'minLat': minLat}
 
@@ -520,16 +512,19 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
             raise Exception('Not enough objects in scene for change_material_names_and_export.')
 
         # building height is an image containing the building height and nothing else
-        height_at_origin, building_height_img = get_height_at_origin(terrain_limits, camera_height=2000,
-                                                                     terrain_height=terrain_limits[-2],
+        height_at_origin, building_height_arr = get_height_at_origin(camera_height=2000, terrain_height=terrain_arr,
                                                                      decimate=decimate, decimate_factor=decimate_factor)
         if run_idx != -1:
             f_ptr_HeightAtOrigin.write(
                 '({:f},{:f},{:f},{:f}),{:f},{:.1f},'.format(minLon, maxLat, maxLon, minLat, buildingToAreaRatio,
                                                             height_at_origin) + save_name + '\n')
             if terrain_save == 'y':
-                terrainImg.save(terrainImgPATH)
-                building_height_img.save(buildingImgPATH)
+                terrain_arr_int16 = terrain_arr.astype(np.int16)
+                building_height_arr_int16 = building_height_arr.astype(np.int16)
+                np.save(terrainImgPATH, terrain_arr_int16)
+                np.save(buildingImgPATH, building_height_arr_int16)
+                # terrainImg.save(terrainImgPATH)
+                # building_height_img.save(buildingImgPATH)
         delete_terrain_and_osm_files()
         f_ptr_HeightAtOrigin.close()
     except Exception as e:
