@@ -17,7 +17,7 @@ error_path_IdxAndPercentBuildings = BASE_PATH + 'error_IdxAndPercentBuildings.tx
 
 # this is actually a log.
 error_path_Exception = BASE_PATH + 'error_Exception.txt'
-HeightAtOrigin_path = BASE_PATH + 'HeightAtOrigin.txt'
+HeightAtOrigin_path = BASE_PATH + 'HeightAtOriginTest.txt'
 f_ptr_error_IdxAndPercentBuildings = open(error_path_IdxAndPercentBuildings, 'w')
 f_ptr_error_Exception = open(error_path_Exception, 'a')
 f_ptr_HeightAtOrigin = open(HeightAtOrigin_path, 'a')
@@ -27,11 +27,11 @@ def install_package(package_name):
     try:
         # path to python.exe
         python_exe = os.path.join(sys.prefix, 'bin', 'python3.10')
-         
+
         # upgrade pip
         subprocess.call([python_exe, "-m", "ensurepip"])
         subprocess.call([python_exe, "-m", "pip", "install", "--upgrade", "pip"])
-         
+
         # install required packages
         subprocess.call([python_exe, "-m", "pip", "install", package_name])
 
@@ -43,7 +43,7 @@ def install_package(package_name):
 
 def delete_terrain_and_osm_files(PATH_download=BASE_PATH + 'Blender_download_files'):
     try:
-        folder_path_osm = PATH_download + '/osm'  #enter path here
+        folder_path_osm = PATH_download + '/osm'  # enter path here
         delete_files_from_directory(folder_path_osm)
         folder_path_terrain = PATH_download + '/terrain'
         delete_files_from_directory(folder_path_terrain)
@@ -53,29 +53,30 @@ def delete_terrain_and_osm_files(PATH_download=BASE_PATH + 'Blender_download_fil
 
 
 def delete_files_from_directory(folder_path):
-    try: 
-        for filename in os.listdir(folder_path): 
-            file_path = os.path.join(folder_path, filename)  
+    try:
+        for filename in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, filename)
             try:
                 if os.path.isfile(file_path):
                     os.remove(file_path)
-            except Exception as e:  
+            except Exception as e:
                 print(f"Error deleting {file_path}: {e}")
         print("Deletion done")
         return
     except Exception as e:
         raise e
 
+
 def delete_all_in_collection():
     try:
         bpy.ops.object.select_all(action='SELECT')
         bpy.ops.object.delete(use_global=False)
-        
+
         # clears all collections
         collections_list = list(bpy.data.collections)
         for col in collections_list:
             bpy.data.collections.remove(col)
-        
+
         for block in bpy.data.meshes:
             bpy.data.meshes.remove(block)
 
@@ -95,22 +96,23 @@ def delete_all_in_collection():
 
 def normalise_to_png(arr_to_norm, maxVal):
     try:
-        return maxVal * (arr_to_norm-np.min(arr_to_norm))/(np.max(arr_to_norm)-np.min(arr_to_norm))
+        return maxVal * (arr_to_norm - np.min(arr_to_norm)) / (np.max(arr_to_norm) - np.min(arr_to_norm))
     except Exception as e:
         raise e
+
 
 def add_osm(maxLon, minLon, maxLat, minLat, from_file='n', osmFilepath=None):
     try:
         bpy.data.scenes['Scene'].blosm.osmSource = 'server'
         bpy.data.scenes['Scene'].blosm.dataType = 'osm'
         bpy.data.scenes['Scene'].blosm.ignoreGeoreferencing = True
-        
+
         bpy.data.scenes['Scene'].blosm.maxLon = maxLon
         bpy.data.scenes['Scene'].blosm.minLon = minLon
 
         bpy.data.scenes['Scene'].blosm.maxLat = maxLat
         bpy.data.scenes['Scene'].blosm.minLat = minLat
-        
+
         # ensure correct settings:
         # does not import as single object
         bpy.data.scenes["Scene"].blosm.singleObject = False
@@ -125,7 +127,7 @@ def add_osm(maxLon, minLon, maxLat, minLat, from_file='n', osmFilepath=None):
         bpy.data.scenes["Scene"].blosm.vegetation = False
         bpy.data.scenes["Scene"].blosm.highways = False
         bpy.data.scenes["Scene"].blosm.railways = False
-        
+
         # import from server
         if from_file == 'n':
             start = time.time()
@@ -144,27 +146,27 @@ def add_terrain(material_name, maxLon, minLon, maxLat, minLat):
     try:
         # toggle to 'terrain' import mode
         bpy.data.scenes['Scene'].blosm.dataType = 'terrain'
-        
+
         # ensure correct settings
         bpy.data.scenes['Scene'].blosm.ignoreGeoreferencing = False
         bpy.data.scenes['Scene'].blosm.ignoreGeoreferencing = True
-        
+
         # set bounds of import
         bpy.data.scenes['Scene'].blosm.maxLon = maxLon
         bpy.data.scenes['Scene'].blosm.minLon = minLon
 
         bpy.data.scenes['Scene'].blosm.maxLat = maxLat
         bpy.data.scenes['Scene'].blosm.minLat = minLat
-        
+
         # import
         start = time.time()
         bpy.ops.blosm.import_data()
         print('\n\nTerrain download: ', str(time.time() - start) + ' seconds\n\n')
-        
+
         # set properties
         terrain_obj = bpy.data.objects['Terrain']
         mat = bpy.data.materials.get(material_name)
-        
+
         if mat is None:
             mat = bpy.data.materials.new(name=material_name)
         terrain_obj.data.materials.append(mat)
@@ -179,7 +181,7 @@ def add_plane(material_name, size=1100):
 
         plane_obj = bpy.data.objects['Plane']
         mat = bpy.data.materials.get(material_name)
-        
+
         if mat is None:
             # create material
             mat = bpy.data.materials.new(name=material_name)
@@ -210,7 +212,7 @@ def change_material_names_and_export(wall_name, roof_name, f_path, outer_idx):
         for obj in list(bpy.data.objects):
             if 'Camera' not in obj.name and 'Terrain' not in obj.name and 'osm_buildings' not in obj.name:
                 obj_names.append(obj.name)
-        
+
         # check that there's more than one object
         if len(list(bpy.data.objects)) < 1:
             raise Exception("There are no OSM building objects in this Scene Collection")
@@ -252,7 +254,20 @@ def change_material_names_and_export(wall_name, roof_name, f_path, outer_idx):
         raise e
 
 
-def terrain_to_png(outer_idx, save='n', camera_height=2000, camera_orthoScale=2000):
+def squarify_photo(arr):
+    try:
+        arr = np.asarray(arr)
+        rrr, ccc = arr.shape
+        min_rc = min([rrr, ccc])
+        return arr[int((rrr - min_rc) / 2):int((rrr + min_rc) / 2), int((ccc - min_rc) / 2):int((ccc + min_rc) / 2)]
+    except Exception as e:
+        raise e
+
+
+def terrain_to_npy(outer_idx, save='n', camera_height=2000, camera_orthoScale=2000, decimate='n', decimate_factor=8):
+    """
+    The important part: returns terrain_height as np array.
+    """
     try:
         bpy.data.objects["Terrain"].select_set(True)
 
@@ -260,40 +275,33 @@ def terrain_to_png(outer_idx, save='n', camera_height=2000, camera_orthoScale=20
         terrain_dg = bpy.context.evaluated_depsgraph_get()
         terrain_obj = bpy.context.object.evaluated_get(terrain_dg)
         mesh = terrain_obj.to_mesh(depsgraph=terrain_dg)
-        vertices = mesh.vertices
 
         # compute the boundaries of the terrain
         # min_x: top-left corner; min_y: bottom-right corner
         # max_x: bottom-right corner; max_y: top-left corner
         min_x, min_y = mesh.vertices[0].co.x, mesh.vertices[-1].co.y
         max_x, max_y = mesh.vertices[-1].co.x, mesh.vertices[0].co.y
-        
+
         print('x min and max of terrain mesh: ', min_x, max_x)
         print('y min and max of terrain mesh: ', min_y, max_y)
         add_camera_and_set(camera_height, camera_orthoScale)
 
         if save == 'y' and outer_idx != -1:
             terrain_depth = take_picture_and_get_depth()
-            r, c = terrain_depth.shape
-            print('\nterrainshape:', r, c)
-            min_rc = min([r, c])
-            # photo should be 1080x1920, so make it into 1080x1920
-            terrain_depth = terrain_depth[int(r/2-min_rc/2):int(r/2+min_rc/2), int(c/2-min_rc/2):int(c/2+min_rc/2)]
+
+            # make terrain_depth square
+            terrain_depth_square = squarify_photo(terrain_depth)
             # transform into height above xy plane in meters
-            terrain_depth = camera_height - terrain_depth
-            print(terrain_depth[0, :])
-            
+            terrain_height = camera_height - terrain_depth_square
+            print(terrain_height[0, :])
+
             # decimate (I know that scipy can also do this) by a factor of 8
-            # it is also proper to do it with scipy since the frequency 
+            # it is also proper to do it with scipy since the frequency
             # components are considered, but I can't be bothered
-            terrain_depth = terrain_depth[::8, ::8]
-            terrain_img = Image.fromarray(terrain_depth)
-            # convert to png format
-            if terrain_img.mode != 'L':
-                terrain_img = terrain_img.convert('L')
+            if decimate == 'y':
+                terrain_height = terrain_height[::decimate_factor, ::decimate_factor]
             if outer_idx != -1:
-                return min_x, max_x, min_y, max_y, terrain_img
-                # terrain_img.save(terrain_img_path)
+                return min_x, max_x, min_y, max_y, terrain_height
 
         bpy.data.objects["Terrain"].select_set(False)
         return min_x, max_x, min_y, max_y
@@ -330,7 +338,7 @@ def clear_compositing_nodes():
 
 def add_camera_and_set(camera_height, camera_orthoScale):
     try:
-        # note: the camera is slightly "thinner" than the terrain. 
+        # note: the camera is slightly "thinner" than the terrain.
         # Increase  camera_orthoScale  to increase the area captured.
         camera_data = bpy.data.cameras.new(name='Camera')
         camera_object = bpy.data.objects.new('Camera', camera_data)
@@ -378,43 +386,29 @@ def take_picture_and_get_depth():
         raise e
 
 
-def get_height_at_origin(terrainLim, camera_height=2000, camera_orthoScale=2000, normalise_to_256='n'):
+def get_height_at_origin(terrain_height, camera_height=2000, normalise_to_256='n',
+                         decimate='n', decimate_factor=8):
+    """
+    terrain_height must be of type(np.array) and values measure height from the xy plane
+    returns building_height numpy array
+    """
     try:
-        min_x, max_x, min_y, max_y, _ = terrainLim
-        assert min_x < max_x and min_y < max_y
-        # add a camera and link it to scene
-        # camera_object = add_camera_and_set(camera_height, camera_orthoScale)
+        depth = take_picture_and_get_depth()  # values that are greater than 65500 have inf depth
+        depth[depth > 65500] = 2000
 
-        depth = take_picture_and_get_depth()
-        select_not_2D = depth > 65500
-        depth[select_not_2D] = 2000
-        
         # get height at origin using a simple reflection
         roww, coll = depth.shape
-        height = camera_height - depth[int(round(roww/2)), int(round(coll/2))]
+        height_at_origin = camera_height - depth[int(round(roww / 2)), int(round(coll / 2))]
 
         if normalise_to_256 == 'y':
             depth = normalise_to_png(depth, 256)
-        depth_img = Image.fromarray(depth)
-        
-        ## saving for illustrative purposes:
-    #    temp_path = '/Users/zeyuli/Desktop/temp_depth.png'
-    #    if depth_img.mode != 'L':
-    #        depth_img = depth_img.convert('L')
-        
-    #    depth_img.save(temp_path)
-        
-        # depth_flatten = depth.flatten()
-        #
-        # selection = np.asarray(np.copy(depth_flatten) < 65500)
-        #
-        # depth_final = depth_flatten[selection]
-        #
-        # print()
-        # print('min_depth: ', np.min(depth), '. max_depth: ', np.max(depth_final))
-        # bpy.data.objects["Camera"].select_set(False)
-        # print('Done with get_height_at_origin\n')
-        return height
+        if decimate == 'y':
+            depth = depth[::decimate_factor, ::decimate_factor]
+
+        height_arr = camera_height - depth
+        height_square = squarify_photo(height_arr)
+        building_height = height_square - terrain_height
+        return height_at_origin, building_height
     except Exception as e:
         raise e
 
@@ -448,55 +442,78 @@ def get_floats_from_coordsFile(line):
         raise e
 
 
-def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, f_ptr_height=f_ptr_HeightAtOrigin, use_path_osm='n'):
+def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_factor,
+        use_path_osm='n'):
     try:
+        decimate = 'n'
+        if decimate_factor != 1:
+            decimate = 'y'
         # bpy.ops.wm.read_userpref()
         delete_all_in_collection()
-        
+
         # path of xml file which would be exported in change_material_names_and_export
         i = str(int(run_idx))
         uuid_run = uuid.uuid4()
         save_name = i + '_' + str(uuid_run)
 
+        HeightAtOrigin_path = BASE_PATH + 'height_at_origin/' + save_name + '.txt'  # 'HeightAtOrigin.txt'
+        f_ptr_HeightAtOrigin = open(HeightAtOrigin_path, 'w')
+
         # should follow maxLon, minLon, maxLat, minLat
         diff = 0.0015
-        loc_args_dict = {'maxLon': maxLon+diff, 'minLon': minLon-diff, 'maxLat': maxLat+diff, 'minLat': minLat-diff}
+        loc_args_dict = {'maxLon': maxLon + diff, 'minLon': minLon - diff, 'maxLat': maxLat + diff,
+                         'minLat': minLat - diff}
 
         # do not add plane. Instead, add terrain
         add_terrain(material_name='itu_concrete', **loc_args_dict)
-        
-        # terrain_limits WRITES the terrain height information as tiff
+
+        # terrain_limits WRITES the terrain height information as png
         # increase camera_orthoScale to increase image size.
-        terrainImgPATH = BASE_PATH + 'Blender_terrain_img/' + save_name + '.png'
+        terrainImgPATH = BASE_PATH + 'Bl_terrain_img/' + save_name + '.npy'
+        buildingImgPATH = BASE_PATH + 'Bl_building_img/' + save_name + '.npy'
         terrain_save = 'y'
-        terrain_limits = terrain_to_png(save=terrain_save, outer_idx=run_idx, camera_height=2000, camera_orthoScale=2000)
+
+        # terrain_limits contains min_x, max_x, min_y, max_y, terrain_height
+        terrain_limits = terrain_to_npy(save=terrain_save, outer_idx=run_idx, camera_height=2000,
+                                        camera_orthoScale=2000, decimate=decimate, decimate_factor=decimate_factor)
         # if terrain_save=='n' then terrainImg is not returned.
         print(len(terrain_limits))
-        terrainImg = terrain_limits[-1]
+        terrain_arr = terrain_limits[-1]
 
         loc_args_dict = {'maxLon': maxLon, 'minLon': minLon, 'maxLat': maxLat, 'minLat': minLat}
-        
+
         # use already-downloaded osm
         if use_path_osm == 'y':
             osm_f_path = BASE_PATH + 'Blender_download_files/osm/map.osm'
             add_osm(**loc_args_dict, from_file='y', osmFilepath=osm_f_path)
-        
+
         elif use_path_osm == 'n':
             # download from server
             add_osm(**loc_args_dict, from_file='n', osmFilepath=None)
 
         # change_material_names_and_export WRITES the XML file as well as the Meshes
-        export_path = BASE_PATH + 'Blender_xml_files/' + save_name + '/' + save_name + '.xml'
-        ret = change_material_names_and_export(wall_name='itu_brick', roof_name='itu_plasterboard', f_path=export_path, outer_idx=run_idx)
+        export_path = BASE_PATH + 'Bl_xml_files/' + save_name + '/' + save_name + '.xml'
+        ret = change_material_names_and_export(wall_name='itu_brick', roof_name='itu_plasterboard', f_path=export_path,
+                                               outer_idx=run_idx)
         if ret != 0:
             raise Exception('Not enough objects in scene for change_material_names_and_export.')
 
-        height_at_origin = get_height_at_origin(terrain_limits, camera_height=2000, camera_orthoScale=2000)
+        # building height is an image containing the building height and nothing else
+        height_at_origin, building_height_arr = get_height_at_origin(camera_height=2000, terrain_height=terrain_arr,
+                                                                     decimate=decimate, decimate_factor=decimate_factor)
         if run_idx != -1:
-            f_ptr_height.write('({:f},{:f},{:f},{:f}),{:f},{:.1f},'.format(minLon, maxLat, maxLon, minLat, buildingToAreaRatio, height_at_origin) + save_name + '\n')
+            f_ptr_HeightAtOrigin.write(
+                '({:f},{:f},{:f},{:f}),{:f},{:.1f},'.format(minLon, maxLat, maxLon, minLat, buildingToAreaRatio,
+                                                            height_at_origin) + save_name + '\n')
             if terrain_save == 'y':
-                terrainImg.save(terrainImgPATH)
+                terrain_arr_int16 = terrain_arr.astype(np.int16)
+                building_height_arr_int16 = building_height_arr.astype(np.int16)
+                np.save(terrainImgPATH, terrain_arr_int16)
+                np.save(buildingImgPATH, building_height_arr_int16)
+                # terrainImg.save(terrainImgPATH)
+                # building_height_img.save(buildingImgPATH)
         delete_terrain_and_osm_files()
+        f_ptr_HeightAtOrigin.close()
     except Exception as e:
         raise e
     return
@@ -529,7 +546,7 @@ count = 0
 try:
     for line in lines:
         # if idx > 242:
-        if idx > 2:
+        if idx > 0:
             break
         line = line.replace('(', '')
         line = line.replace(')', '')
@@ -539,14 +556,17 @@ try:
         minLonOut, maxLatOut, maxLonOut, minLatOut, percent = [float(l) for l in line]
         if percent > percent_threshold:
             print('\n\nIndex, starting run seq: ' + str(idx) + '\n\n')
-            try:
-                run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=percent, run_idx=idx)
-            except KeyboardInterrupt:
-                raise KeyboardInterrupt()
-            except Exception as e:
-                f_ptr_error_Exception.write(traceback.format_exc())
-                f_ptr_error_IdxAndPercentBuildings.write(str(idx) + ',' + str(percent) + '\n')
-                print(e)
+#            try:
+#                run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=percent,
+#                    run_idx=idx, decimate_factor=1)
+#            except KeyboardInterrupt:
+#                raise KeyboardInterrupt()
+#            except Exception as e:
+#                f_ptr_error_Exception.write(traceback.format_exc())
+#                f_ptr_error_IdxAndPercentBuildings.write(str(idx) + ',' + str(percent) + '\n')
+#                print(e)
+            run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=percent,
+                run_idx=idx, decimate_factor=1)
             count += 1
         idx += 1
     print('number of files with bulding to area ratio > ' + str(percent_threshold), count)
