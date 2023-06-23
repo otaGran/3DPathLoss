@@ -512,7 +512,7 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
                 np.save(buildingImgPATH, building_height_arr_int16)
                 # terrainImg.save(terrainImgPATH)
                 # building_height_img.save(buildingImgPATH)
-        delete_terrain_and_osm_files()
+        # delete_terrain_and_osm_files()
         f_ptr_HeightAtOrigin.close()
     except Exception as e:
         raise e
