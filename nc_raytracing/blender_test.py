@@ -12,15 +12,21 @@ import traceback
 from PIL import Image
 import numpy as np
 
-BASE_PATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/'
-error_path_IdxAndPercentBuildings = BASE_PATH + 'error_IdxAndPercentBuildings.txt'
 
-# this is actually a log.
-error_path_Exception = BASE_PATH + 'error_Exception.txt'
-HeightAtOrigin_path = BASE_PATH + 'HeightAtOriginTest.txt'
-f_ptr_error_IdxAndPercentBuildings = open(error_path_IdxAndPercentBuildings, 'w')
-f_ptr_error_Exception = open(error_path_Exception, 'a')
-f_ptr_HeightAtOrigin = open(HeightAtOrigin_path, 'a')
+BASE_PATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res/'
+BLENDER_PATH = '/Users/zeyuli/blender-git/build_darwin/bin/Blender.app/Contents/MacOS/Blender'
+BLENDER_COMMAND_LINE_PATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/3DPathLoss/nc_raytracing/blender_test_command_line.py'
+BLENDER_OSM_DOWNLOAD_PATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_download_files/osm/'
+RES_FILE_NAME = 'res3_srv1_whole_us_filtered_new.txt'
+
+# error_path_IdxAndPercentBuildings = BASE_PATH + 'error_IdxAndPercentBuildings.txt'
+#
+# # this is actually a log.
+# error_path_Exception = BASE_PATH + 'error_Exception.txt'
+# HeightAtOrigin_path = BASE_PATH + 'HeightAtOriginTest.txt'
+# f_ptr_error_IdxAndPercentBuildings = open(error_path_IdxAndPercentBuildings, 'w')
+# f_ptr_error_Exception = open(error_path_Exception, 'a')
+# f_ptr_HeightAtOrigin = open(HeightAtOrigin_path, 'a')
 
 
 def install_package(package_name):
@@ -394,7 +400,7 @@ def get_height_at_origin(terrain_height, camera_height=2000, normalise_to_256='n
     """
     try:
         depth = take_picture_and_get_depth()  # values that are greater than 65500 have inf depth
-        depth[depth > 65500] = 2000
+        depth[depth > 65500] = camera_height
 
         # get height at origin using a simple reflection
         roww, coll = depth.shape
@@ -413,6 +419,17 @@ def get_height_at_origin(terrain_height, camera_height=2000, normalise_to_256='n
         raise e
 
 
+def get_height_buildings(loc_args_dict, from_file='n', osm_filepath=None, cam_ht=2000, cam_ortho_scale=2000):
+    # this should be called before most other functions in run()
+    add_osm(**loc_args_dict, from_file=from_file, osmFilepath=osm_filepath)
+    add_camera_and_set(camera_height=cam_ht, camera_orthoScale=cam_ortho_scale)
+    building_depth = take_picture_and_get_depth()
+    building_depth[building_depth > 65500] = cam_ht
+    building_depth_sqr = squarify_photo(building_depth)
+    building_ht_arr = cam_ht - building_depth_sqr
+    return building_ht_arr
+
+
 def calc_totalOSM_above_thresh(perc, text_lines):
     try:
         c = 0
@@ -421,8 +438,8 @@ def calc_totalOSM_above_thresh(perc, text_lines):
             text_line = text_line.replace(')', '')
             text_line = text_line.replace('\n', '')
             text_line = text_line.split(',')
-            _, _, _, _, temp_percent = [float(lll) for lll in text_line]
-            if temp_percent > perc:
+            _, _, _, _, temp_percent, _ = [lll for lll in text_line]
+            if float(temp_percent) > perc:
                 c += 1
         return c
     except Exception as e:
@@ -450,14 +467,19 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
             decimate = 'y'
         # bpy.ops.wm.read_userpref()
         delete_all_in_collection()
+        loc_args_dict = {'maxLon': maxLon, 'minLon': minLon, 'maxLat': maxLat, 'minLat': minLat}
+        osm_f_path = BLENDER_OSM_DOWNLOAD_PATH + IDX_UUID + '.osm'
+        building_ht_fixed = get_height_buildings(loc_args_dict, from_file=use_path_osm, osm_filepath=osm_f_path,
+                                                 cam_ht=2000, cam_ortho_scale=2000)
+        delete_all_in_collection()
 
         # path of xml file which would be exported in change_material_names_and_export
-        i = str(int(run_idx))
-        uuid_run = uuid.uuid4()
-        save_name = i + '_' + str(uuid_run)
+        # i = str(int(run_idx))
+        # uuid_run = uuid.uuid4()
+        # SAVE_NAMAE = i + '_' + str(uuid_run)
+        save_name = IDX_UUID
 
         HeightAtOrigin_path = BASE_PATH + 'height_at_origin/' + save_name + '.txt'  # 'HeightAtOrigin.txt'
-        f_ptr_HeightAtOrigin = open(HeightAtOrigin_path, 'w')
 
         # should follow maxLon, minLon, maxLat, minLat
         diff = 0.0015
@@ -469,8 +491,8 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
 
         # terrain_limits WRITES the terrain height information as png
         # increase camera_orthoScale to increase image size.
-        terrainImgPATH = BASE_PATH + 'Bl_terrain_img/' + save_name + '.npy'
-        buildingImgPATH = BASE_PATH + 'Bl_building_img/' + save_name + '.npy'
+        terrainImgPATH = BASE_PATH + 'Bl_terrain_npy/' + save_name + '.npy'
+        buildingImgPATH = BASE_PATH + 'Bl_building_npy/' + save_name + '.npy'
         terrain_save = 'y'
 
         # terrain_limits contains min_x, max_x, min_y, max_y, terrain_height
@@ -481,15 +503,8 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
         terrain_arr = terrain_limits[-1]
 
         loc_args_dict = {'maxLon': maxLon, 'minLon': minLon, 'maxLat': maxLat, 'minLat': minLat}
-
-        # use already-downloaded osm
-        if use_path_osm == 'y':
-            osm_f_path = BASE_PATH + 'Blender_download_files/osm/map.osm'
-            add_osm(**loc_args_dict, from_file='y', osmFilepath=osm_f_path)
-
-        elif use_path_osm == 'n':
-            # download from server
-            add_osm(**loc_args_dict, from_file='n', osmFilepath=None)
+        # use already-downloaded osm is only selected when both from_file=='y' and osmFilepath is not None
+        add_osm(**loc_args_dict, from_file=use_path_osm, osmFilepath=osm_f_path)
 
         # change_material_names_and_export WRITES the XML file as well as the Meshes
         export_path = BASE_PATH + 'Bl_xml_files/' + save_name + '/' + save_name + '.xml'
@@ -499,62 +514,66 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
             raise Exception('Not enough objects in scene for change_material_names_and_export.')
 
         # building height is an image containing the building height and nothing else
-        height_at_origin, building_height_arr = get_height_at_origin(camera_height=2000, terrain_height=terrain_arr,
-                                                                     decimate=decimate, decimate_factor=decimate_factor)
+        # note: this function outputs wavy buildings, since the building height is constant even on top of terrain
+        height_at_origin, _ = get_height_at_origin(camera_height=2000, terrain_height=terrain_arr,
+                                                   decimate=decimate, decimate_factor=decimate_factor)
         if run_idx != -1:
+            f_ptr_HeightAtOrigin = open(HeightAtOrigin_path, 'w')
             f_ptr_HeightAtOrigin.write(
                 '({:f},{:f},{:f},{:f}),{:f},{:.1f},'.format(minLon, maxLat, maxLon, minLat, buildingToAreaRatio,
                                                             height_at_origin) + save_name + '\n')
+            f_ptr_HeightAtOrigin.close()
             if terrain_save == 'y':
                 terrain_arr_int16 = terrain_arr.astype(np.int16)
-                building_height_arr_int16 = building_height_arr.astype(np.int16)
+                building_height_arr_int16 = building_ht_fixed.astype(np.int16)
+
                 np.save(terrainImgPATH, terrain_arr_int16)
                 np.save(buildingImgPATH, building_height_arr_int16)
                 # terrainImg.save(terrainImgPATH)
                 # building_height_img.save(buildingImgPATH)
         # delete_terrain_and_osm_files()
-        f_ptr_HeightAtOrigin.close()
     except Exception as e:
         raise e
     return
 
 
 def exit_routine():
-    f_ptr_error_Exception.write(str(datetime.now()) + ', last index: ' + str(idx) + '\n')
-    f_ptr_error_Exception.write('number of OSM files exported: ' + str(count) + '\n')
-
-    # close files
-    f_ptr_error_Exception.close()
-    f_ptr_error_IdxAndPercentBuildings.close()
-    f_ptr_HeightAtOrigin.close()
+    # f_ptr_error_Exception.write(str(datetime.now()) + ', last index: ' + str(idx) + '\n')
+    # f_ptr_error_Exception.write('number of OSM files exported: ' + str(count) + '\n')
+    #
+    # # close files
+    # f_ptr_error_Exception.close()
+    # f_ptr_error_IdxAndPercentBuildings.close()
+    # f_ptr_HeightAtOrigin.close()
     return
 
 
-loc_fPtr = open(BASE_PATH + 'res3_srv1_whole_us_filtered.txt', 'r')
+loc_fPtr = open(BASE_PATH + RES_FILE_NAME, 'r')
 lines = loc_fPtr.readlines()
 print(len(lines))
 
-f_ptr_error_Exception.write('\n\n\n-------\nRun started at: ' + str(datetime.now()) + '\n')
+# f_ptr_error_Exception.write('\n\n\n-------\nRun started at: ' + str(datetime.now()) + '\n')
 
 percent_threshold = 0.2
 
 num = calc_totalOSM_above_thresh(perc=percent_threshold, text_lines=lines)
 print('Numer of OSM with building to area ratio above ' + str(percent_threshold) + ' is', str(num))
 
-idx = 0
+idx = 7
 count = 0
 try:
     for line in lines:
         # if idx > 242:
-        if idx > 0:
+        if idx > 7:
             break
         line = line.replace('(', '')
         line = line.replace(')', '')
         line = line.replace('\n', '')
         line = line.split(',')
         # file format: minLon, maxLat, maxLon, minLat
-        minLonOut, maxLatOut, maxLonOut, minLatOut, percent = [float(l) for l in line]
-        if percent > percent_threshold:
+        minLonOut, maxLatOut, maxLonOut, minLatOut, percent = [float(l) for l in line[0:-1]]
+        IDX_UUID = line[-1]
+        if float(percent) > percent_threshold:
             print('\n\nIndex, starting run seq: ' + str(idx) + '\n\n')
 #            try:
 #                run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=percent,
@@ -565,8 +584,8 @@ try:
 #                f_ptr_error_Exception.write(traceback.format_exc())
 #                f_ptr_error_IdxAndPercentBuildings.write(str(idx) + ',' + str(percent) + '\n')
 #                print(e)
-            run(maxLonOut, minLonOut, maxLatOut, minLatOut, buildingToAreaRatio=percent,
-                run_idx=idx, decimate_factor=1)
+            run(float(maxLonOut), float(minLonOut), float(maxLatOut), float(minLatOut), buildingToAreaRatio=float(percent),
+                run_idx=idx, decimate_factor=1, use_path_osm='y')
             count += 1
         idx += 1
     print('number of files with bulding to area ratio > ' + str(percent_threshold), count)
@@ -576,7 +595,7 @@ try:
     print('\nDONE\n\n\n\n\n')
 
 except KeyboardInterrupt:
-    f_ptr_error_Exception.write(str(datetime.now()) + ': Keyboard Interrupt\n')
+    # f_ptr_error_Exception.write(str(datetime.now()) + ': Keyboard Interrupt\n')
     exit_routine()
     print('\nEXIT FROM SCRIPT\n\n\n\n')
     
