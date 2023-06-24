@@ -2,17 +2,21 @@ import subprocess
 import concurrent
 from concurrent.futures import wait
 import os
-import uuid
+from os.path import join, dirname
+# import uuid
+from dotenv import load_dotenv
 
-BASE_PATH = '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res/'
+load_dotenv(join(dirname(__file__), '.env'))
+
+BASE_PATH = os.environ.get('BASE_PATH')
 # BLENDER_PATH should be the path I built, since the things are enabled
-BLENDER_PATH = "/Users/zeyuli/blender-git/build_darwin/bin/Blender.app/Contents/MacOS/Blender"
-BLENDER_COMMAND_LINE_PATH = "/Users/zeyuli/Desktop/Duke/0. Su23_Research/3DPathLoss/nc_raytracing/blender_test_command_line.py"
-BLENDER_OSM_DOWNLOAD_PATH = "/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/Blender_download_files/osm/"
+BLENDER_PATH = os.environ.get('BLENDER_PATH')
+BLENDER_COMMAND_LINE_PATH = os.environ.get('BLENDER_COMMAND_LINE_PATH')
+BLENDER_OSM_DOWNLOAD_PATH = os.environ.get('BLENDER_OSM_DOWNLOAD_PATH')
 START_FROM_IDX = 0
 NUM_OF_PROCESS = 8
 DECIMATE_FACTOR = 1
-RES_FILE_NAME = 'res3_srv1_whole_us_filtered_new.txt'
+RES_FILE_NAME = os.environ.get('RES_FILE_NAME')
 
 
 def blender_to_xml(minLonOut, maxLatOut, maxLonOut, minLatOut, percent):
@@ -57,7 +61,7 @@ if __name__ == '__main__':
         for idx, line in enumerate(lines):
             if idx < START_FROM_IDX:
                 continue
-            print(idx)
+            # print(idx)
             # file format: minLon, maxLat, maxLon, minLat, percent, idx_uuid
             minLonOut, maxLatOut, maxLonOut, minLatOut, percent, idx_uuid = splitting_a_line(lll=line, uuid_incl='y')
 
@@ -70,7 +74,7 @@ if __name__ == '__main__':
                  "--minLon", str(minLonOut),
                  "--maxLat", str(maxLatOut),
                  "--maxLon", str(maxLonOut),
-                 "--minLat",str(minLatOut),
+                 "--minLat", str(minLatOut),
                  "--building_to_area_ratio", str(percent),
                  "--decimate_factor", str(DECIMATE_FACTOR),
                  "--BASE_PATH", str(BASE_PATH),
@@ -88,11 +92,12 @@ if __name__ == '__main__':
             # print(futures[-3].result())
 
             # pbar.updae(1)
-        for future in concurrent.futures.as_completed(futures):
+        for idx, future in enumerate(concurrent.futures.as_completed(futures)):
             try:
-                data = future.result()
+                data = future.result().stdout
+                print('\n\n\n\n\n' + str(idx) + '\n' + data + '\n\n\n\n\n')
             except Exception as e:
-                print(data)
+                print(e)
     wait(futures)
 
 # print('number of files with bulding to area ratio > ' + str(percent_threshold), count)
