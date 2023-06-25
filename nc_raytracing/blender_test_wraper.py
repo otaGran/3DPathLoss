@@ -7,7 +7,7 @@ from os.path import join, dirname
 from dotenv import load_dotenv
 
 load_dotenv(join(dirname(__file__), '.env'))
-
+print(dirname(__file__))
 BASE_PATH = os.environ.get('BASE_PATH')
 # BLENDER_PATH should be the path I built, since the things are enabled
 BLENDER_PATH = os.environ.get('BLENDER_PATH')
@@ -52,6 +52,7 @@ def splitting_a_line(lll, uuid_incl='n'):
 
 
 if __name__ == '__main__':
+    print(BASE_PATH)
     f_names_xml = [f for f in os.listdir(BASE_PATH + 'Bl_xml_files/')
                    if os.path.isdir(BASE_PATH + 'Bl_xml_files/' + f)]
     with open(BASE_PATH + RES_FILE_NAME, 'r') as loc_fPtr:
@@ -70,6 +71,7 @@ if __name__ == '__main__':
                 [BLENDER_PATH, "--background",
                  "--python",
                  BLENDER_COMMAND_LINE_PATH, "--",
+                 "--cycles-device","CPU",
                  "--idx", str(idx),
                  "--minLon", str(minLonOut),
                  "--maxLat", str(maxLatOut),
@@ -81,6 +83,7 @@ if __name__ == '__main__':
                  "--BLENDER_OSM_DOWNLOAD_PATH", str(BLENDER_OSM_DOWNLOAD_PATH),
                  "--idx_uuid", str(idx_uuid)],
                 capture_output=True, text=True))
+            break
             # if len(futures) % NUM_OF_PROCESS == 0:
             #     wait(futures)
             #     #
@@ -98,7 +101,7 @@ if __name__ == '__main__':
                 print('\n\n\n\n\n' + str(idx) + '\n' + data + '\n\n\n\n\n')
             except Exception as e:
                 print(e)
-    wait(futures)
+        wait(futures)
 
 # print('number of files with bulding to area ratio > ' + str(percent_threshold), count)
 # print('percentage of files with bulding to area ratio > ' + str(percent_threshold), count / len(lines))

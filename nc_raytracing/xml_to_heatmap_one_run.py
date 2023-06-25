@@ -119,10 +119,15 @@ def save_routine(cm, img_path):
     try:
         cm_tensor = cm.as_tensor()
         cm_2D = cm_tensor.numpy()[0, :, :]
-        cm_2D[cm_2D == 0] = np.nan
-        cm_2D_dB = 10*np.log10(cm_2D)
-        cm_img = Image.fromarray(cm_2D_dB)
-        cm_img.save(img_path)
+        
+        # saving as dB and tiff
+        # cm_2D[cm_2D == 0] = np.nan
+        # cm_2D_dB = 10*np.log10(cm_2D)
+        # cm_img = Image.fromarray(cm_2D_dB)
+        # cm_img.save(img_path)
+        
+        # saving as power and npy
+        np.save(img_path, cm_2D)
         return
     except Exception as e:
         raise e
@@ -133,7 +138,15 @@ def run_routine():
         # print('Calculating for index:', str(idx))
         coverage_map, scene, fName = cm_routine(extra_height=args.extra_height, f_ptr_height=f_ptr_H)
         # print(fName)
-        image_path = BASE_PATH_SIONNA + fName + '.tiff'
+        
+        
+        # saving as tiff:
+        # image_path = BASE_PATH_SIONNA + fName + '.tiff'
+        
+        # saving as npy:
+        image_path = BASE_PATH_SIONNA + fName
+        
+        
         save_routine(coverage_map, image_path)
         # print('Cumulative time expended:', str(time.time() - start) + ' seconds\n\n')
         return

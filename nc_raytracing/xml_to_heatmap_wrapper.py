@@ -11,10 +11,13 @@ import numpy as np
 # Import Sionna RT components
 from sionna.rt import load_scene, Transmitter, Receiver, PlanarArray, Camera, Paths2CIR
 
-BASE_PATH_BLENDER = 'res/'
-BASE_PATH_SIONNA = 'Sionna_coverage_maps/coverage_maps_new/'
-# BLENDER_PATH should be the path I built, since the things are enabled
-# BLENDER_PATH = "/Users/zeyuli/blender-git/build_darwin/bin/Blender.app/Contents/MacOS/Blender"
+# testing new Blender_command_line function written on 23. Jun 2023
+BASE_PATH_BLENDER = 'res/res_building_map_test_24Jun23/'
+BASE_PATH_SIONNA = 'Sionna_coverage_maps/coverage_maps_building_map_test_24Jun23/'
+
+# un-comment 
+# BASE_PATH_BLENDER = 'res/res_23Jun23/'
+# BASE_PATH_SIONNA = 'Sionna_coverage_maps/coverage_maps_new_22Jun23/'
 # START_FROM_IDX = 512
 NUM_OF_PROCESS = 1
 EXTRA_HEIGHT = 2
@@ -65,7 +68,7 @@ def sionna_run(height_file, extra_height, cm_cell_size, BASE_PATH_BLENDER, BASE_
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
     tf.random.set_seed(1)  # Set global random seed for reproducibility
-
+    
     def get_data_from_HeightFile(f_ptr_height):
         try:
             lines = f_ptr_height.readlines()
@@ -158,14 +161,19 @@ def sionna_run(height_file, extra_height, cm_cell_size, BASE_PATH_BLENDER, BASE_
 if __name__ == '__main__':
     f_names_xml = [f for f in os.listdir(BASE_PATH_BLENDER + 'Bl_xml_files/')
                    if os.path.isdir(BASE_PATH_BLENDER + 'Bl_xml_files/' + f)]
-    print(len(f_names_xml))
+    print('Number of xml files:', len(f_names_xml))
     # f[0:-5] to remove the tiff
     f_names_sig_map = [f[0:-5] for f in os.listdir(BASE_PATH_SIONNA)
                        if os.path.isfile(BASE_PATH_SIONNA + f)]
-    print(len(f_names_sig_map))
+    print(len('Number of finished signal maps:', f_names_sig_map))
     futures = []
     # print(f_names_sig_map)
-
+    
+    
+    
+    
+    
+    
     """
     for idx, f_name_xml in enumerate(f_names_xml):
         if f_name_xml not in f_names_sig_map:
@@ -174,42 +182,46 @@ if __name__ == '__main__':
                 break
             except Exception as e:
                 print(e)
-    """
-
+    """  
+            
+            
+            
+            
+            
     """
         Comment out the second call to futures.append using sionna_run if you want to run xml_to_heatmap_one_run
         as a subprocess. 
         sionna_run duplicates the functionalities of xml_to_heatmap_one_run without having to run 
         xml_to_heatmap_one_run as a subprocess. 
     """
-
+    
     with concurrent.futures.ProcessPoolExecutor(max_workers=NUM_OF_PROCESS) as executor:
         for idx, f_name_xml in enumerate(f_names_xml):
             if f_name_xml not in f_names_sig_map:  # skip cmaps that have already been generated
                 # Running as sub-process:
-                # futures.append(executor.submit(subprocess.run,
-                #                                ['python', 'xml_to_heatmap_one_run.py',
-                #                                 '--height_file', str(f_name_xml) + '.txt',
-                #                                 '--extra_height', str(EXTRA_HEIGHT),
-                #                                 '--cm_cell_size', str(10),
-                #                                 '--BASE_PATH_BLENDER', str(BASE_PATH_BLENDER),
-                #                                 '--BASE_PATH_SIONNA', str(BASE_PATH_SIONNA),
-                #                                 '--outer_idx', str(idx)],
-                #                                capture_output=True, text=True))
+                 futures.append(executor.submit(subprocess.run,
+                                                ['python', 'xml_to_heatmap_one_run.py',
+                                                 '--height_file', str(f_name_xml) + '.txt',
+                                                 '--extra_height', str(EXTRA_HEIGHT),
+                                                 '--cm_cell_size', str(10),
+                                                 '--BASE_PATH_BLENDER', str(BASE_PATH_BLENDER),
+                                                 '--BASE_PATH_SIONNA', str(BASE_PATH_SIONNA),
+                                                 '--outer_idx', str(idx)],
+                                                capture_output=True, text=True))
 
                 # Running as a function in this file.
-                futures.append(executor.submit(sionna_run,
-                                               str(f_name_xml + '.txt'),
-                                               EXTRA_HEIGHT,
-                                               10,
-                                               BASE_PATH_BLENDER,
-                                               BASE_PATH_SIONNA,
-                                               idx))
+                # futures.append(executor.submit(sionna_run,
+                #                               str(f_name_xml) + '.txt',
+                #                               EXTRA_HEIGHT,
+                #                              10,
+                #                               BASE_PATH_BLENDER,
+                #                               BASE_PATH_SIONNA,
+                #                               idx))
 
                 # print('Doing:', f_name_xml, idx)
-                if len(futures) % 10 == 0:
-                    wait(futures)
-                continue
+                # if len(futures) % 10 == 0:
+                #     wait(futures)
+                # continue
             # print('Skipping:', f_name_xml, idx)
 
     wait(futures)

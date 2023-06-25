@@ -9,7 +9,7 @@ import time
 import uuid
 import argparse
 
-from PIL import Image
+#from PIL import Image
 import numpy as np
 
 if '--' in sys.argv:
@@ -56,7 +56,9 @@ def install_package(package_name):
     except Exception as e:
         raise e
 
-
+install_package("pillow")
+install_package("mitsuba==3.0.1")
+from PIL import Image
 def delete_terrain_and_osm_files(PATH_download=BASE_PATH + 'Blender_download_files'):
     try:
         folder_path_osm = PATH_download + '/osm'  # enter path here
@@ -143,7 +145,15 @@ def add_osm(maxLon, minLon, maxLat, minLat, from_file='n', osmFilepath=None):
         bpy.data.scenes["Scene"].blosm.vegetation = False
         bpy.data.scenes["Scene"].blosm.highways = False
         bpy.data.scenes["Scene"].blosm.railways = False
+        bpy.data.scenes[0].render.engine = "CYCLES"
 
+        # Set the device_type
+        bpy.context.preferences.addons[
+             "cycles"
+        ].preferences.compute_device_type = "NONE" # or "OPENCL"
+
+        # Set the device and feature set
+        bpy.context.scene.cycles.device = "CPU"
         # import from server
         if from_file == 'n':
             start = time.time()
@@ -429,7 +439,8 @@ def get_height_at_origin(terrain_height, camera_height=2000, normalise_to_256='n
         raise e
 
 
-def get_height_buildings(loc_args_dict, from_file='n', osm_filepath=None, cam_ht=2000, cam_ortho_scale=2000):
+def get_height_buildings(loc_args_dict, from_file='n', osm_filepath=None, cam_ht=2000, cam_ortho_scale=2000,
+                        decimate='y', decimate_factor=8):
     # this should be called before most other functions in run()
     add_osm(**loc_args_dict, from_file=from_file, osmFilepath=osm_filepath)
     add_camera_and_set(camera_height=cam_ht, camera_orthoScale=cam_ortho_scale)
@@ -437,6 +448,8 @@ def get_height_buildings(loc_args_dict, from_file='n', osm_filepath=None, cam_ht
     building_depth[building_depth > 65500] = cam_ht
     building_depth_sqr = squarify_photo(building_depth)
     building_ht_arr = cam_ht - building_depth_sqr
+    if decimate == 'y':
+        building_ht_arr = building_ht_arr[::decimate_factor, ::decimate_factor]
     return building_ht_arr
 
 
@@ -448,8 +461,8 @@ def calc_totalOSM_above_thresh(perc, text_lines):
             text_line = text_line.replace(')', '')
             text_line = text_line.replace('\n', '')
             text_line = text_line.split(',')
-            _, _, _, _, temp_percent = [float(lll) for lll in text_line]
-            if temp_percent > perc:
+            _, _, _, _, temp_percent, _ = [lll for lll in text_line]
+            if float(temp_percent) > perc:
                 c += 1
         return c
     except Exception as e:
@@ -479,7 +492,9 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
         delete_all_in_collection()
         loc_args_dict = {'maxLon': maxLon, 'minLon': minLon, 'maxLat': maxLat, 'minLat': minLat}
         osm_f_path = args.BLENDER_OSM_DOWNLOAD_PATH + args.idx_uuid + '.osm'
-        building_ht_fixed = get_height_buildings(loc_args_dict, from_file=use_path_osm, osm_filepath=osm_f_path, cam_ht=2000, cam_ortho_scale=2000)
+        building_ht_fixed = get_height_buildings(loc_args_dict, from_file=use_path_osm, osm_filepath=osm_f_path,
+                                                 cam_ht=2000, cam_ortho_scale=2000, decimate=decimate,
+                                                 decimate_factor=decimate_factor)
         delete_all_in_collection()
 
         # path of xml file which would be exported in change_material_names_and_export
@@ -489,7 +504,6 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
         save_name = args.idx_uuid
 
         HeightAtOrigin_path = BASE_PATH + 'height_at_origin/' + save_name + '.txt'  # 'HeightAtOrigin.txt'
-        f_ptr_HeightAtOrigin = open(HeightAtOrigin_path, 'w')
 
         # should follow maxLon, minLon, maxLat, minLat
         diff = 0.0015
@@ -528,19 +542,18 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
         height_at_origin, _ = get_height_at_origin(camera_height=2000, terrain_height=terrain_arr,
                                                                      decimate=decimate, decimate_factor=decimate_factor)
         if run_idx != -1:
+            f_ptr_HeightAtOrigin = open(HeightAtOrigin_path, 'w')
             f_ptr_HeightAtOrigin.write(
                 '({:f},{:f},{:f},{:f}),{:f},{:.1f},'.format(minLon, maxLat, maxLon, minLat, buildingToAreaRatio,
                                                             height_at_origin) + save_name + '\n')
+            f_ptr_HeightAtOrigin.close()
             if terrain_save == 'y':
                 terrain_arr_int16 = terrain_arr.astype(np.int16)
                 building_height_arr_int16 = building_ht_fixed.astype(np.int16)
 
                 np.save(terrainImgPATH, terrain_arr_int16)
                 np.save(buildingImgPATH, building_height_arr_int16)
-                # terrainImg.save(terrainImgPATH)
-                # building_height_img.save(buildingImgPATH)
         # delete_terrain_and_osm_files()
-        f_ptr_HeightAtOrigin.close()
     except Exception as e:
         raise e
     return
