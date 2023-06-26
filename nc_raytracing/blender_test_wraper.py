@@ -34,6 +34,10 @@ def splitting_a_line(lll, uuid_incl='n'):
 
 if __name__ == '__main__':
     print(BASE_PATH)
+    os.makedirs( BASE_PATH + 'height_at_origin/', exist_ok=True)
+    os.makedirs( BASE_PATH + 'Bl_terrain_npy/', exist_ok=True)
+    os.makedirs( BASE_PATH + 'Bl_building_npy/', exist_ok=True)
+    os.makedirs( BASE_PATH + 'Bl_xml_files/', exist_ok=True)
     # f_names_xml = [f for f in os.listdir(BASE_PATH + 'Bl_xml_files/')
     #                if os.path.isdir(BASE_PATH + 'Bl_xml_files/' + f)]
     
@@ -52,7 +56,6 @@ if __name__ == '__main__':
                 [BLENDER_PATH, "--background",
                  "--python",
                  BLENDER_COMMAND_LINE_PATH, "--",
-                 "--cycles-device","CPU",
                  "--idx", str(idx),
                  "--minLon", str(minLonOut),
                  "--maxLat", str(maxLatOut),
