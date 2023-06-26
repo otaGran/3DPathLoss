@@ -56,9 +56,9 @@ def install_package(package_name):
     except Exception as e:
         raise e
 
-install_package("pillow")
-install_package("mitsuba==3.0.1")
-from PIL import Image
+# install_package("pillow")
+# install_package("mitsuba==3.0.1")
+# from PIL import Image
 def delete_terrain_and_osm_files(PATH_download=BASE_PATH + 'Blender_download_files'):
     try:
         folder_path_osm = PATH_download + '/osm'  # enter path here

@@ -55,6 +55,7 @@ if __name__ == '__main__':
     print(BASE_PATH)
     f_names_xml = [f for f in os.listdir(BASE_PATH + 'Bl_xml_files/')
                    if os.path.isdir(BASE_PATH + 'Bl_xml_files/' + f)]
+    
     with open(BASE_PATH + RES_FILE_NAME, 'r') as loc_fPtr:
         lines = loc_fPtr.readlines()
     futures = []
@@ -65,7 +66,8 @@ if __name__ == '__main__':
             # print(idx)
             # file format: minLon, maxLat, maxLon, minLat, percent, idx_uuid
             minLonOut, maxLatOut, maxLonOut, minLatOut, percent, idx_uuid = splitting_a_line(lll=line, uuid_incl='y')
-
+            #if idx_uuid in f_names_xml:
+                #continue
             futures.append(executor.submit(
                 subprocess.run,
                 [BLENDER_PATH, "--background",
@@ -83,7 +85,6 @@ if __name__ == '__main__':
                  "--BLENDER_OSM_DOWNLOAD_PATH", str(BLENDER_OSM_DOWNLOAD_PATH),
                  "--idx_uuid", str(idx_uuid)],
                 capture_output=True, text=True))
-            break
             # if len(futures) % NUM_OF_PROCESS == 0:
             #     wait(futures)
             #     #
@@ -91,9 +92,10 @@ if __name__ == '__main__':
             #     print(s)
             #     s = str(futures[-2].result()).replace('\\n','\n')
             #     print(s)
-            -100.702389, 25.318173, -100.692025, 25.309523
+            # -100.702389, 25.318173, -100.692025, 25.309523
             # print(futures[-3].result())
-
+            if idx > 5:
+                break
             # pbar.updae(1)
         for idx, future in enumerate(concurrent.futures.as_completed(futures)):
             try:
