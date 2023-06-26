@@ -145,15 +145,17 @@ def add_osm(maxLon, minLon, maxLat, minLat, from_file='n', osmFilepath=None):
         bpy.data.scenes["Scene"].blosm.vegetation = False
         bpy.data.scenes["Scene"].blosm.highways = False
         bpy.data.scenes["Scene"].blosm.railways = False
-        bpy.data.scenes[0].render.engine = "CYCLES"
-
-        # Set the device_type
-        bpy.context.preferences.addons[
-             "cycles"
-        ].preferences.compute_device_type = "NONE" # or "OPENCL"
-
-        # Set the device and feature set
-        bpy.context.scene.cycles.device = "CPU"
+        bpy.data.scenes[0].render.engine = "BLENDER_EEVEE"
+        # the following lines are for running on the server:
+        # bpy.data.scenes[0].render.engine = "CYCLES"
+        #
+        # # Set the device_type
+        # bpy.context.preferences.addons[
+        #      "cycles"
+        # ].preferences.compute_device_type = "CUDA" # or "OPENCL"
+        #
+        # # Set the device and feature set
+        # bpy.context.scene.cycles.device = "GPU"
         # import from server
         if from_file == 'n':
             start = time.time()
@@ -256,17 +258,23 @@ def change_material_names_and_export(wall_name, roof_name, f_path, outer_idx):
                 obj_data = bpy.data.objects[obj_name].data
 
                 bpy.data.objects[obj_name].active_material_index = 0
-                if bpy.data.objects[obj_name].active_material.name != wall_name:
-                    mat_destination = bpy.data.materials[wall_name]
-                    mat_source = bpy.data.materials[bpy.data.objects[obj_name].active_material.name]
-                    replace_material(obj_data, mat_source, mat_destination)
+                try:
+                    if bpy.data.objects[obj_name].active_material.name != wall_name:
+                        mat_destination = bpy.data.materials[wall_name]
+                        mat_source = bpy.data.materials[bpy.data.objects[obj_name].active_material.name]
+                        replace_material(obj_data, mat_source, mat_destination)
 
-                bpy.data.objects[obj_name].active_material_index = 1
-                if bpy.data.objects[obj_name].active_material.name != roof_name:
-                    mat_destination = bpy.data.materials[roof_name]
-                    mat_source = bpy.data.materials[bpy.data.objects[obj_name].active_material.name]
-                    replace_material(obj_data, mat_source, mat_destination)
-                    # replace mat_source with mat_destination
+                    bpy.data.objects[obj_name].active_material_index = 1
+                    if bpy.data.objects[obj_name].active_material.name != roof_name:
+                        mat_destination = bpy.data.materials[roof_name]
+                        mat_source = bpy.data.materials[bpy.data.objects[obj_name].active_material.name]
+                        replace_material(obj_data, mat_source, mat_destination)
+                        # replace mat_source with mat_destination
+                except AttributeError:
+                    print(bpy.data.objects[obj_name], bpy.data.objects[obj_name].active_material)
+                    # un-linking object.
+                    obj_to_delete = bpy.data.objects[obj_name]
+                    bpy.data.objects.remove(obj_to_delete, do_unlink=True)
                 if len(list(obj_data.materials)) > 2:
                     for jjj in range(2, len(list(obj_data.materials))):
                         bpy.data.objects[obj_name].active_material_index = jjj
