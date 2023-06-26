@@ -10,7 +10,7 @@ import concurrent
 import multiprocessing
 import asyncio
 from concurrent.futures import wait
-
+import numpy as np
 
 def splitting_a_line(lll, uuid_incl='n'):
     lll = lll.replace('(', '')
@@ -27,18 +27,26 @@ def splitting_a_line(lll, uuid_incl='n'):
 def consumer(queue, tqdm_size):
 
     pabar2 = tqdm(total=tqdm_size, position=0, desc="Saving", leave=True)
+    res = []
     while True:
         # get a unit of work
         item = queue.get(block=True)
 
         pabar2.update(1)
         # check for stop
+        res.append(item)
+
+        if len(res) % 10 == 0 or  item is None:
+            file1 = open(BASE_PATH + RES_FILE_NAME, 'a')
+            file1.writelines(res)
+            file1.close()
+            res.clear()
+
         if item is None:
             break
 
-        file1 = open(BASE_PATH + RES_FILE_NAME, 'a')
-        file1.writelines(item)
-        file1.close()
+
+
 
 
 def producer_download_osm(queue, BLENDER_OSM_DOWNLOAD_PATH, line, idx):
@@ -61,6 +69,14 @@ def producer_download_osm(queue, BLENDER_OSM_DOWNLOAD_PATH, line, idx):
     res = '(' + ','.join(temp_arr[0:4]) + '),' + ','.join(temp_arr[-2:]) + '\n'
     queue.put(res)
 
+def producer(batch_lines, batch_idxs, queue, BLENDER_OSM_DOWNLOAD_PATH):
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        for line, idx in zip(batch_lines, batch_idxs):
+            executor.submit(producer_download_osm, queue, BLENDER_OSM_DOWNLOAD_PATH, line, idx)
+        # executor.submit(compute_building_to_land_ration, job[0], job[1], queue, to4326) for job in batch
+        # wait for tasks to cwait(futures)omplete
+        #_ = wait(futures)
 
 if __name__ == '__main__':
     load_dotenv(join(dirname(__file__), '.env'))
@@ -86,11 +102,17 @@ if __name__ == '__main__':
     try:
         consumer_process = Thread(target=consumer, args=(queue, len(lines)))
         consumer_process.start()
-        with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
-            for idx, line in enumerate(lines):
-                futures.append(executor.submit(producer_download_osm, queue, BLENDER_OSM_DOWNLOAD_PATH, line, idx))
-                if idx >= 5:
-                    break
+        with concurrent.futures.ProcessPoolExecutor(max_workers=5) as executor:
+            batch_size = 100
+            idxs = np.arange(len(lines))
+            for i in range(0, len(lines), batch_size):
+                batch_lines = lines[i:i + batch_size]  # the result might be shorter than batchsize at the end
+                batch_idxs = idxs[i:i + batch_size]  # the result might be shorter than batchsize at the end
+                # do stuff with batch
+                # for job in job_queue:
+                a_result = executor.submit(producer, batch_lines, batch_idxs, queue, BLENDER_OSM_DOWNLOAD_PATH)
+            # for idx, line in enumerate(lines):
+            #     futures.append(executor.submit(producer_download_osm, queue, BLENDER_OSM_DOWNLOAD_PATH, line, idx))
     except KeyboardInterrupt:
         for job in futures:
             job.cancel()
