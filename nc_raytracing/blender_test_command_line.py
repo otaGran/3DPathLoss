@@ -256,29 +256,25 @@ def change_material_names_and_export(wall_name, roof_name, f_path, outer_idx):
 
             for obj_name in obj_names:
                 obj_data = bpy.data.objects[obj_name].data
-
-                bpy.data.objects[obj_name].active_material_index = 0
                 try:
-                    if bpy.data.objects[obj_name].active_material.name != wall_name:
-                        mat_destination = bpy.data.materials[wall_name]
-                        mat_source = bpy.data.materials[bpy.data.objects[obj_name].active_material.name]
-                        replace_material(obj_data, mat_source, mat_destination)
+                    for mat_idx in range(len(list(obj_data.materials))):
 
-                    bpy.data.objects[obj_name].active_material_index = 1
-                    if bpy.data.objects[obj_name].active_material.name != roof_name:
-                        mat_destination = bpy.data.materials[roof_name]
-                        mat_source = bpy.data.materials[bpy.data.objects[obj_name].active_material.name]
-                        replace_material(obj_data, mat_source, mat_destination)
-                        # replace mat_source with mat_destination
+                        bpy.data.objects[obj_name].active_material_index = mat_idx
+                        if bpy.data.objects[obj_name].active_material.name == 'wall' or bpy.data.objects[obj_name].active_material.name == 'roof':
+                            if bpy.data.objects[obj_name].active_material.name == 'wall':
+                                mat_destination = bpy.data.materials[wall_name]
+                            else:
+                                mat_destination = bpy.data.materials[roof_name]
+                            mat_source = bpy.data.materials[bpy.data.objects[obj_name].active_material.name]
+                            replace_material(obj_data, mat_source, mat_destination)
+                            # replace mat_source with mat_destination
+                        else:
+                            bpy.ops.object.material_slot_remove()
                 except AttributeError:
                     print(bpy.data.objects[obj_name], bpy.data.objects[obj_name].active_material)
                     # un-linking object.
                     obj_to_delete = bpy.data.objects[obj_name]
                     bpy.data.objects.remove(obj_to_delete, do_unlink=True)
-                if len(list(obj_data.materials)) > 2:
-                    for jjj in range(2, len(list(obj_data.materials))):
-                        bpy.data.objects[obj_name].active_material_index = jjj
-                        bpy.ops.object.material_slot_remove()
 
         # export
         if outer_idx != -1:
@@ -548,7 +544,8 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
         # building height is an image containing the building height and nothing else
         # note: this function outputs wavy buildings, since the building height is constant even on top of terrain
         height_at_origin, _ = get_height_at_origin(camera_height=2000, terrain_height=terrain_arr,
-                                                                     decimate=decimate, decimate_factor=decimate_factor)
+                                                   decimate=decimate, decimate_factor=decimate_factor)
+
         if run_idx != -1:
             f_ptr_HeightAtOrigin = open(HeightAtOrigin_path, 'w')
             f_ptr_HeightAtOrigin.write(
