@@ -12,7 +12,8 @@ BASE_PATH = os.environ.get('BASE_PATH')
 BLENDER_PATH = os.environ.get('BLENDER_PATH')
 BLENDER_COMMAND_LINE_PATH = os.environ.get('BLENDER_COMMAND_LINE_PATH')
 BLENDER_OSM_DOWNLOAD_PATH = os.environ.get('BLENDER_OSM_DOWNLOAD_PATH')
-START_FROM_IDX = 0
+START_FROM_IDX = 102
+STOP_AT_IDX = 200
 NUM_OF_PROCESS = 5
 DECIMATE_FACTOR = 90
 RES_FILE_NAME = os.environ.get('RES_FILE_NAME')
@@ -47,7 +48,9 @@ if __name__ == '__main__':
         for idx, line in enumerate(lines):
             if idx < START_FROM_IDX:
                 continue
-            # file format: minLon, maxLat, maxLon, minLat, percent, idx_uuid
+            if idx >= STOP_AT_IDX:
+                break
+            # file format: (minLon,maxLat,maxLon,minLat),percent,idx_uuid\n
             minLonOut, maxLatOut, maxLonOut, minLatOut, percent, idx_uuid = splitting_a_line(lll=line, uuid_incl='y')
             # print(' '.join([BLENDER_PATH, "--background",
             #      "--python",
