@@ -31,12 +31,6 @@ args = parser.parse_known_args(argv)[0]
 
 # this is the path where the results are stored (terrain_npy, building_npy, height files, Mitsuba_export)
 BASE_PATH = args.BASE_PATH  # '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res/'
-# error_path_IdxAndPercentBuildings = BASE_PATH + 'error_IdxAndPercentBuildings.txt'
-
-# this is actually a log.
-# error_path_Exception = BASE_PATH + 'error_Exception.txt'
-# f_ptr_error_IdxAndPercentBuildings = open(error_path_IdxAndPercentBuildings, 'w')
-# f_ptr_error_Exception = open(error_path_Exception, 'a')
 
 
 def install_package(package_name):
@@ -230,7 +224,7 @@ def replace_material(obj_data, mat_src, mat_dest):
         raise e
 
 
-def change_material_names_and_export(wall_name, roof_name, f_path, outer_idx):
+def change_material_names_and_export(wall_name, roof_name, f_path, export='y'):
     try:
         obj_names = [obj.name for obj in list(bpy.data.objects)]
         if len(obj_names) <= 2:
@@ -253,10 +247,13 @@ def change_material_names_and_export(wall_name, roof_name, f_path, outer_idx):
             mat_roof = bpy.data.materials.get(roof_name)
             if mat_roof is None:
                 bpy.data.materials.new(name=roof_name)
-
             for obj_name in obj_names:
                 obj_data = bpy.data.objects[obj_name].data
+                # bpy.ops.object.select_all(action='DESELECT')
                 try:
+                    if len(list(obj_data.materials)) == 0:
+                        obj_to_delete = bpy.data.objects[obj_name]
+                        bpy.data.objects.remove(obj_to_delete, do_unlink=True)
                     for mat_idx in range(len(list(obj_data.materials))):
 
                         bpy.data.objects[obj_name].active_material_index = mat_idx
@@ -270,14 +267,23 @@ def change_material_names_and_export(wall_name, roof_name, f_path, outer_idx):
                             # replace mat_source with mat_destination
                         else:
                             bpy.ops.object.material_slot_remove()
+                    bpy.data.objects[obj_name].select_set(False)
                 except AttributeError:
-                    print(bpy.data.objects[obj_name], bpy.data.objects[obj_name].active_material)
+                    print('AttributeError', bpy.data.objects[obj_name], bpy.data.objects[obj_name].active_material)
                     # un-linking object.
                     obj_to_delete = bpy.data.objects[obj_name]
                     bpy.data.objects.remove(obj_to_delete, do_unlink=True)
-
+                except RuntimeError as err:
+                    print('RuntimeError', bpy.data.objects[obj_name], bpy.data.objects[obj_name].active_material)
+                    obj_to_delete = bpy.data.objects[obj_name]
+                    bpy.data.objects.remove(obj_to_delete, do_unlink=True)
+                    # raise err
+                except KeyError:
+                    pass
+        bpy.ops.object.select_all(action='DESELECT')
+        # bpy.ops.object.mode_set(mode='OBJECT')
         # export
-        if outer_idx != -1:
+        if export == 'y' and f_path is not None:
             bpy.ops.export_scene.mitsuba(filepath=f_path, axis_forward='Y', axis_up='Z')
         return 0
     except Exception as e:
@@ -448,6 +454,9 @@ def get_height_buildings(loc_args_dict, from_file='n', osm_filepath=None, cam_ht
     # this should be called before most other functions in run()
     add_osm(**loc_args_dict, from_file=from_file, osmFilepath=osm_filepath)
     add_camera_and_set(camera_height=cam_ht, camera_orthoScale=cam_ortho_scale)
+    # the main use of change_material_names_and_export is that it removes buildings that can't be exported
+    # so that the building height map and the eventual raytrace model are fine.
+    change_material_names_and_export(wall_name='itu_brick', roof_name='itu_plasterboard', f_path=None, export='n')
     building_depth = take_picture_and_get_depth()
     building_depth[building_depth > 65500] = cam_ht
     building_depth_sqr = squarify_photo(building_depth)
@@ -502,9 +511,6 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
         delete_all_in_collection()
 
         # path of xml file which would be exported in change_material_names_and_export
-        # i = str(int(run_idx))
-        # uuid_run = uuid.uuid4()
-        # SAVE_NAMAE = i + '_' + str(uuid_run)
         save_name = args.idx_uuid
 
         HeightAtOrigin_path = BASE_PATH + 'height_at_origin/' + save_name + '.txt'  # 'HeightAtOrigin.txt'
@@ -537,7 +543,8 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
         # change_material_names_and_export WRITES the XML file as well as the Meshes
         export_path = BASE_PATH + 'Bl_xml_files/' + save_name + '/' + save_name + '.xml'
         ret = change_material_names_and_export(wall_name='itu_brick', roof_name='itu_plasterboard', f_path=export_path,
-                                               outer_idx=run_idx)
+                                               export='y')
+
         if ret != 0:
             raise Exception('Not enough objects in scene for change_material_names_and_export.')
 
