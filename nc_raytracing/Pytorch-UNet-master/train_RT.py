@@ -105,7 +105,9 @@ def train_model(
 
                 with torch.autocast(device.type if device.type != 'mps' else 'cpu', enabled=amp):
                     masks_pred = model(images)
-                    loss = criterion(masks_pred.squeeze(1), true_masks.float())
+                    # RMSE instead of MSE since the data is spread
+                    loss = torch.sqrt(criterion(masks_pred.squeeze(1), true_masks.float()))
+
                     #print("loss",loss)
                     # if model.n_classes == 1:
                     #     loss = criterion(masks_pred.squeeze(1), true_masks.float())
