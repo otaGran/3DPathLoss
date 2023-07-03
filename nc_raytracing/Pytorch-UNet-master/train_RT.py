@@ -140,32 +140,32 @@ def train_model(
                 division_step = (n_train // (5 * batch_size))
                 # if division_step > 0:
                 #     if global_step % division_step == 0:
-                histograms = {}
-                for tag, value in model.named_parameters():
-                    tag = tag.replace('/', '.')
-                    if not (torch.isinf(value) | torch.isnan(value)).any():
-                        histograms['Weights/' + tag] = wandb.Histogram(value.data.cpu())
-                    if not (torch.isinf(value.grad) | torch.isnan(value.grad)).any():
-                        histograms['Gradients/' + tag] = wandb.Histogram(value.grad.data.cpu())
+            histograms = {}
+            for tag, value in model.named_parameters():
+                tag = tag.replace('/', '.')
+                if not (torch.isinf(value) | torch.isnan(value)).any():
+                    histograms['Weights/' + tag] = wandb.Histogram(value.data.cpu())
+                if not (torch.isinf(value.grad) | torch.isnan(value.grad)).any():
+                    histograms['Gradients/' + tag] = wandb.Histogram(value.grad.data.cpu())
 
-                val_score = evaluate(model, val_loader, device, amp)
-                #scheduler.step(val_score)
-                logging.info('Validation Dice score: {}'.format(val_score))
-                try:
-                    experiment.log({
-                        'learning rate': optimizer.param_groups[0]['lr'],
-                        'validation Dice': val_score,
-                        'images': wandb.Image(images[0].cpu()),
-                        'masks': {
-                            'true': wandb.Image(true_masks[0].float().cpu()),
-                            'pred': wandb.Image(masks_pred.argmax(dim=1)[0].float().cpu()),
-                        },
-                        'step': global_step,
-                        'epoch': epoch,
-                        **histograms
-                    })
-                except:
-                    pass
+            val_score = evaluate(model, val_loader, device, amp)
+            #scheduler.step(val_score)
+            logging.info('Validation Dice score: {}'.format(val_score))
+            try:
+                experiment.log({
+                    'learning rate': optimizer.param_groups[0]['lr'],
+                    'validation Dice': val_score,
+                    'images': wandb.Image(images[0].cpu()),
+                    'masks': {
+                        'true': wandb.Image(true_masks[0].float().cpu()),
+                        'pred': wandb.Image(masks_pred.argmax(dim=1)[0].float().cpu()),
+                    },
+                    'step': global_step,
+                    'epoch': epoch,
+                    **histograms
+                })
+            except:
+                pass
 
 
         Path(dir_checkpoint).mkdir(parents=True, exist_ok=True)
