@@ -27,7 +27,7 @@ dir_checkpoint = Path('./checkpoints/')
 
 building_height_map_dir = os.path.abspath('../res/Bl_building_npy')
 terrain_height_map_dir = os.path.abspath('../res/Bl_terrain_npy')
-ground_truth_signal_strength_map_dir = os.path.abspath('./coverage_maps_building_map_test_Jun27_before_vegas')
+ground_truth_signal_strength_map_dir = os.path.abspath('../Sionna_coverage_maps/coverage_maps_building_map_test_Jun27_before_vegas')
 
 def train_model(
         model,
@@ -138,35 +138,34 @@ def train_model(
 
                 # Evaluation round
                 division_step = (n_train // (5 * batch_size))
-                if division_step > 0:
-                    if global_step % division_step == 0:
-                        histograms = {}
-                        for tag, value in model.named_parameters():
-                            tag = tag.replace('/', '.')
-                            if not (torch.isinf(value) | torch.isnan(value)).any():
-                                histograms['Weights/' + tag] = wandb.Histogram(value.data.cpu())
-                            if not (torch.isinf(value.grad) | torch.isnan(value.grad)).any():
-                                histograms['Gradients/' + tag] = wandb.Histogram(value.grad.data.cpu())
+                # if division_step > 0:
+                #     if global_step % division_step == 0:
+                histograms = {}
+                for tag, value in model.named_parameters():
+                    tag = tag.replace('/', '.')
+                    if not (torch.isinf(value) | torch.isnan(value)).any():
+                        histograms['Weights/' + tag] = wandb.Histogram(value.data.cpu())
+                    if not (torch.isinf(value.grad) | torch.isnan(value.grad)).any():
+                        histograms['Gradients/' + tag] = wandb.Histogram(value.grad.data.cpu())
 
-                        val_score = evaluate(model, val_loader, device, amp)
-                        scheduler.step(val_score)
-
-                        logging.info('Validation Dice score: {}'.format(val_score))
-                        try:
-                            experiment.log({
-                                'learning rate': optimizer.param_groups[0]['lr'],
-                                'validation Dice': val_score,
-                                'images': wandb.Image(images[0].cpu()),
-                                'masks': {
-                                    'true': wandb.Image(true_masks[0].float().cpu()),
-                                    'pred': wandb.Image(masks_pred.argmax(dim=1)[0].float().cpu()),
-                                },
-                                'step': global_step,
-                                'epoch': epoch,
-                                **histograms
-                            })
-                        except:
-                            pass
+                val_score = evaluate(model, val_loader, device, amp)
+                #scheduler.step(val_score)
+                logging.info('Validation Dice score: {}'.format(val_score))
+                try:
+                    experiment.log({
+                        'learning rate': optimizer.param_groups[0]['lr'],
+                        'validation Dice': val_score,
+                        'images': wandb.Image(images[0].cpu()),
+                        'masks': {
+                            'true': wandb.Image(true_masks[0].float().cpu()),
+                            'pred': wandb.Image(masks_pred.argmax(dim=1)[0].float().cpu()),
+                        },
+                        'step': global_step,
+                        'epoch': epoch,
+                        **histograms
+                    })
+                except:
+                    pass
 
 
         Path(dir_checkpoint).mkdir(parents=True, exist_ok=True)
@@ -198,6 +197,7 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
     # n_classes is the number of probabilities you want to get per pixel
