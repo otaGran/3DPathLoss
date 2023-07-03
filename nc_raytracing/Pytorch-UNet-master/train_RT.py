@@ -197,7 +197,7 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    device = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
+    #device = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
     # n_classes is the number of probabilities you want to get per pixel
