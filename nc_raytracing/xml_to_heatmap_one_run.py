@@ -1,4 +1,6 @@
+
 import os # Configure which GPU
+
 import time
 import argparse
 import traceback
@@ -40,7 +42,7 @@ f_ptr_H = open(BASE_PATH + 'height_at_origin/' + args.height_file, 'r')
     Setting up the environment, including the GPUs
 """
 gpu_num = 0 # Use "" to use the CPU
-os.environ["CUDA_VISIBLE_DEVICES"] = f"{gpu_num}"
+
 
 gpus = tf.config.list_physical_devices('GPU')
 print(gpus)
@@ -77,6 +79,7 @@ def get_data_from_HeightFile(f_ptr_height):
 def cm_routine(extra_height, f_ptr_height):
     try:
         _,_,_,_,_, height_at_origin, file_name = get_data_from_HeightFile(f_ptr_height=f_ptr_height)
+        print("file name", file_name)
         start_loc = time.time()
         scene = load_scene(BASE_PATH + 'Bl_xml_files/' + file_name + '/' + file_name + '.xml')
         # print('load scene time: ', str(time.time() - start_loc))
@@ -96,7 +99,7 @@ def cm_routine(extra_height, f_ptr_height):
                                   polarization="cross")
         # Add a transmitter
         tx = Transmitter(name="tx",
-                      position=[0, 0, height_at_origin+extra_height],
+                      position=[0, 0, height_at_origin+extra_height+15],
                       orientation=[0, 0, 0])
         scene.add(tx)
 
@@ -122,12 +125,12 @@ def save_routine(cm, img_path):
         
         # saving as dB and tiff
         # cm_2D[cm_2D == 0] = np.nan
-        # cm_2D_dB = 10*np.log10(cm_2D)
+        cm_2D_dB = 10*np.log10(cm_2D)
         # cm_img = Image.fromarray(cm_2D_dB)
         # cm_img.save(img_path)
         
         # saving as power and npy
-        np.save(img_path, cm_2D)
+        np.save(img_path, cm_2D_dB)
         return
     except Exception as e:
         raise e
@@ -148,6 +151,7 @@ def run_routine():
         
         
         save_routine(coverage_map, image_path)
+        print("images path",image_path)
         # print('Cumulative time expended:', str(time.time() - start) + ' seconds\n\n')
         return
     except Exception as e:
