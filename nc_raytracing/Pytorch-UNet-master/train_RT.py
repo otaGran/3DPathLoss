@@ -151,6 +151,7 @@ def train_model(
                     histograms['Gradients/' + tag] = wandb.Histogram(value.grad.data.cpu())
 
             val_score = evaluate(model, val_loader, device, amp)
+            optimizer.zero_grad(set_to_none=True)
             #scheduler.step(val_score)
             logging.info('Validation Dice score: {}'.format(val_score))
             try:
