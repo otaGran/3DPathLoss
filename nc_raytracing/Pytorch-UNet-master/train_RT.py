@@ -201,7 +201,7 @@ if __name__ == '__main__':
     logging.info(f'Using device {device}')
 
     # n_classes is the number of probabilities you want to get per pixel
-    model = UNet(n_channels=2, n_classes=1, bilinear=args.bilinear)
+    model = UNet(n_channels=1, n_classes=1, bilinear=args.bilinear)
     model = model.to(memory_format=torch.channels_last)
 
     logging.info(f'Network:\n'
