@@ -125,9 +125,13 @@ class RTDataset(Dataset):
         # Ori image size 1040 * 1040, crop to 1000 * 1000
         building_height_arr = load_image(building_height_file[0])[40:1040,40:1040]
         terrain_height_arr = load_image(terrain_height_file[0])[40:1040,40:1040]
+
+
+
         ground_truth_arr = load_image(ground_truth_file[0])
         ground_truth_arr[ground_truth_arr == -np.inf] = -300
         ground_truth_arr = np.nan_to_num(ground_truth_arr, nan=0)
+        ground_truth_arr[ground_truth_arr >= 0] = 0
 
 
         # Since right now GT.size is 100*100 and other two size is 1000 * 1000, just check the input.
