@@ -138,8 +138,8 @@ class RTDataset(Dataset):
         # terrain_height_arr = self.preprocess(terrain_height_arr)
         # ground_truth_arr = self.preprocess(self.mask_values, ground_truth_arr, self.scale, is_mask=True)
         combined_input = np.zeros((2, building_height_arr.shape[0], building_height_arr.shape[1]))
-        combined_input[0,:, :] = building_height_arr  # Assign first channel data
-        combined_input[1,:, :] = terrain_height_arr  # Assign second channel data
+        combined_input[0,:, :] = building_height_arr[::10, ::10]  # Assign first channel data
+        combined_input[1,:, :] = terrain_height_arr[::10, ::10]  # Assign second channel data
         return {
             'combined_input': torch.as_tensor(combined_input.copy()).float().contiguous(),
             'ground_truth': torch.as_tensor(ground_truth_arr.copy()).long().contiguous()

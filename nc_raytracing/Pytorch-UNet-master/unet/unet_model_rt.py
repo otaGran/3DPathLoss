@@ -11,7 +11,7 @@ class UNet(nn.Module):
         self.n_classes = n_classes
         self.bilinear = bilinear
 
-        self.downSampling = nn.Conv2d(in_channels=2, out_channels=2, kernel_size=10, stride=10, padding=0)
+
         self.inc = (DoubleConv(n_channels, 64))
         self.down1 = (Down(64, 128))
         self.down2 = (Down(128, 256))
@@ -25,8 +25,7 @@ class UNet(nn.Module):
         self.outc = (OutConv(64, n_classes))
 
     def forward(self, x):
-        x0 = self.downSampling(x)
-        x1 = self.inc(x0)
+        x1 = self.inc(x)
         x2 = self.down1(x1)
         x3 = self.down2(x2)
         x4 = self.down3(x3)
