@@ -9,7 +9,6 @@ import time
 import uuid
 import argparse
 
-#from PIL import Image
 import numpy as np
 
 if '--' in sys.argv:
@@ -24,6 +23,7 @@ parser.add_argument('-d', '--decimate_factor', type=int, required=False, default
 parser.add_argument('-p', '--BASE_PATH', type=str, required=True)
 parser.add_argument('-u', '--BLENDER_OSM_DOWNLOAD_PATH', type=str, required=True)
 parser.add_argument('-n', '--idx_uuid', type=str, required=True)
+parser.add_argument('--terrain_or_plane', type=str, required=True)
 
 parser.add_argument('-o', '--building_to_area_ratio', type=float, required=True)
 
@@ -31,7 +31,7 @@ args = parser.parse_known_args(argv)[0]
 
 # this is the path where the results are stored (terrain_npy, building_npy, height files, Mitsuba_export)
 BASE_PATH = args.BASE_PATH  # '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res/'
-
+terrain_to_npy_ERROR = -100
 
 def install_package(package_name):
     try:
@@ -208,10 +208,10 @@ def add_plane(material_name, size=1100):
             # create material
             mat = bpy.data.materials.new(name=material_name)
         plane_obj.data.materials.append(mat)
+        print(plane_obj.data.materials[0])
         return
     except Exception as e:
         raise e
-
 
 def replace_material(obj_data, mat_src, mat_dest):
     try:
@@ -232,9 +232,9 @@ def change_material_names_and_export(wall_name, roof_name, f_path, export='y'):
 
         obj_names = []
         for obj in list(bpy.data.objects):
-            if 'Camera' not in obj.name and 'Terrain' not in obj.name and 'osm_buildings' not in obj.name:
-                obj_names.append(obj.name)
-
+            if 'Camera' in obj.name or 'Terrain' in obj.name or 'osm_buildings' in obj.name or 'Plane' in obj.name:
+                continue
+            obj_names.append(obj.name)
         # check that there's more than one object
         if len(list(bpy.data.objects)) < 1:
             raise Exception("There are no OSM building objects in this Scene Collection")
@@ -422,13 +422,14 @@ def take_picture_and_get_depth():
         raise e
 
 
-def get_height_at_origin(terrain_height, camera_height=2000, normalise_to_256='n',
-                         decimate='n', decimate_factor=8):
+def get_height_at_origin(camera_height=2000, normalise_to_256='n', decimate='n', decimate_factor=8):
     """
     terrain_height must be of type(np.array) and values measure height from the xy plane
     returns building_height numpy array
     """
     try:
+        if args.terrain_or_plane == 'plane':
+            add_camera_and_set(camera_height, camera_orthoScale=2000)
         depth = take_picture_and_get_depth()  # values that are greater than 65500 have inf depth
         depth[depth > 65500] = camera_height
 
@@ -443,8 +444,8 @@ def get_height_at_origin(terrain_height, camera_height=2000, normalise_to_256='n
 
         height_arr = camera_height - depth
         height_square = squarify_photo(height_arr)
-        building_height = height_square - terrain_height
-        return height_at_origin, building_height
+        # building_height = height_square - terrain_height
+        return height_at_origin
     except Exception as e:
         raise e
 
@@ -520,21 +521,27 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
         loc_args_dict = {'maxLon': maxLon + diff, 'minLon': minLon - diff, 'maxLat': maxLat + diff,
                          'minLat': minLat - diff}
 
-        # do not add plane. Instead, add terrain
-        add_terrain(material_name='itu_concrete', **loc_args_dict)
-
-        # terrain_limits WRITES the terrain height information as png
-        # increase camera_orthoScale to increase image size.
         terrainImgPATH = BASE_PATH + 'Bl_terrain_npy/' + save_name + '.npy'
         buildingImgPATH = BASE_PATH + 'Bl_building_npy/' + save_name + '.npy'
-        terrain_save = 'y'
 
-        # terrain_limits contains min_x, max_x, min_y, max_y, terrain_height
-        terrain_limits = terrain_to_npy(save=terrain_save, outer_idx=run_idx, camera_height=2000,
-                                        camera_orthoScale=2000, decimate=decimate, decimate_factor=decimate_factor)
-        # if terrain_save=='n' then terrainImg is not returned.
-        print(len(terrain_limits))
-        terrain_arr = terrain_limits[-1]
+        if args.terrain_or_plane == 'plane':
+            add_plane(material_name='itu_concrete')
+            terrain_save = 'n'
+        if args.terrain_or_plane == 'terrain':
+            add_terrain(material_name='itu_concrete', **loc_args_dict)
+            # terrain_limits WRITES the terrain height information as png
+            # increase camera_orthoScale to increase image size.
+            terrain_save = 'y'
+
+            # terrain_limits contains min_x, max_x, min_y, max_y, terrain_height
+            terrain_limits = terrain_to_npy(save=terrain_save, outer_idx=run_idx, camera_height=2000,
+                                            camera_orthoScale=2000, decimate=decimate, decimate_factor=decimate_factor)
+            # if terrain_save=='n' then terrainImg is not returned.
+            print(len(terrain_limits))
+            terrain_arr = terrain_limits[-1]
+        if args.terrain_or_plane != 'plane' and args.terrain_or_plane != 'terrain':
+            print('terrain_or_plane arg is wrong')
+            raise KeyboardInterrupt
 
         loc_args_dict = {'maxLon': maxLon, 'minLon': minLon, 'maxLat': maxLat, 'minLat': minLat}
         # use already-downloaded osm is only selected when both from_file=='y' and osmFilepath is not None
@@ -550,8 +557,8 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
 
         # building height is an image containing the building height and nothing else
         # note: this function outputs wavy buildings, since the building height is constant even on top of terrain
-        height_at_origin, _ = get_height_at_origin(camera_height=2000, terrain_height=terrain_arr,
-                                                   decimate=decimate, decimate_factor=decimate_factor)
+        height_at_origin = get_height_at_origin(camera_height=2000, decimate=decimate,
+                                                decimate_factor=decimate_factor)
 
         if run_idx != -1:
             f_ptr_HeightAtOrigin = open(HeightAtOrigin_path, 'w')
@@ -559,12 +566,13 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
                 '({:f},{:f},{:f},{:f}),{:f},{:.1f},'.format(minLon, maxLat, maxLon, minLat, buildingToAreaRatio,
                                                             height_at_origin) + save_name + '\n')
             f_ptr_HeightAtOrigin.close()
-            if terrain_save == 'y':
+            if args.terrain_or_plane == 'terrain':
                 terrain_arr_int16 = terrain_arr.astype(np.int16)
-                building_height_arr_int16 = building_ht_fixed.astype(np.int16)
-
-                np.save(terrainImgPATH, terrain_arr_int16)
-                np.save(buildingImgPATH, building_height_arr_int16)
+            if args.terrain_or_plane == 'plane':
+                terrain_arr_int16 = np.zeros((int(1080/decimate_factor), int(1080/decimate_factor))).astype(np.int16)
+            building_height_arr_int16 = building_ht_fixed.astype(np.int16)
+            np.save(terrainImgPATH, terrain_arr_int16)
+            np.save(buildingImgPATH, building_height_arr_int16)
         # delete_terrain_and_osm_files()
     except Exception as e:
         raise e
@@ -574,5 +582,7 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
 try:
     run(args.maxLon, args.minLon, args.maxLat, args.minLat, args.idx, args.building_to_area_ratio,
         decimate_factor=args.decimate_factor, use_path_osm='y')
+    print('DONE with 1 rep')
+    # raise KeyboardInterrupt
 except Exception as e:
     raise e
