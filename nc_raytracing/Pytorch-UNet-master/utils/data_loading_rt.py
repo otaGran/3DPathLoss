@@ -123,16 +123,16 @@ class RTDataset(Dataset):
 
 
         # Ori image size 1040 * 1040, crop to 1000 * 1000
-        building_height_arr = load_image(building_height_file[0])[40:1040,40:1040]
-        terrain_height_arr = load_image(terrain_height_file[0])[40:1040,40:1040]
+        building_height_arr = load_image(building_height_file[0])[4:104,4:104]
+        terrain_height_arr = load_image(terrain_height_file[0])[4:104,4:104]
 
 
 
         ground_truth_arr = load_image(ground_truth_file[0])
-        ground_truth_arr[ground_truth_arr == -np.inf] = -300
+        ground_truth_arr[ground_truth_arr == -np.inf] = -160
         ground_truth_arr = np.nan_to_num(ground_truth_arr, nan=0)
         ground_truth_arr[ground_truth_arr >= 0] = 0
-
+        ground_truth_arr[ground_truth_arr <= -160] = -160
 
         # Since right now GT.size is 100*100 and other two size is 1000 * 1000, just check the input.
         assert building_height_arr.shape == terrain_height_arr.shape, \
@@ -143,8 +143,8 @@ class RTDataset(Dataset):
         # ground_truth_arr = self.preprocess(self.mask_values, ground_truth_arr, self.scale, is_mask=True)
         #combined_input = np.zeros((2, 100, 100))
         combined_input = np.zeros((1, 100, 100))
-        combined_input[0,:, :] = building_height_arr[::10, ::10]  # Assign first channel data
-        #combined_input[1,:, :] = terrain_height_arr[::10, ::10]  # Assign second channel data
+        combined_input[0,:, :] = building_height_arr  # Assign first channel data
+        #combined_input[1,:, :] = terrain_height_arr  # Assign second channel data
         return {
             'combined_input': torch.as_tensor(combined_input.copy()).float().contiguous(),
             'ground_truth': torch.as_tensor(ground_truth_arr.copy()).long().contiguous()

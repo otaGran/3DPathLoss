@@ -25,9 +25,9 @@ from utils.data_loading_rt import RTDataset
 # dir_mask = Path('./coverage_maps')
 dir_checkpoint = Path('./checkpoints/')
 
-building_height_map_dir = os.path.abspath('../res/Bl_building_npy')
-terrain_height_map_dir = os.path.abspath('../res/Bl_terrain_npy')
-ground_truth_signal_strength_map_dir = os.path.abspath('../Sionna_coverage_maps/coverage_maps_building_map_test_Jun27_before_vegas')
+building_height_map_dir = os.path.abspath('../res_plane/Bl_building_npy')
+terrain_height_map_dir = os.path.abspath('../res_plane/Bl_terrain_npy')
+ground_truth_signal_strength_map_dir = os.path.abspath('/dev/shm/coverage_maps_building_map_test_Jul4')
 
 def train_model(
         model,
@@ -79,7 +79,7 @@ def train_model(
     # 4. Set up the optimizer, the loss, the learning rate scheduler and the loss scaling for AMP
     optimizer = optim.RMSprop(model.parameters(),
                               lr=learning_rate, weight_decay=weight_decay, momentum=momentum, foreach=True)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=150)  # goal: maximize Dice score
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5)  # goal: maximize Dice score
     grad_scaler = torch.cuda.amp.GradScaler(enabled=amp)
     criterion = nn.MSELoss()
     global_step = 0
@@ -136,7 +136,7 @@ def train_model(
                 pbar.set_postfix(**{'loss (batch)': loss.item()})
 
                 # Evaluation round
-                division_step = (n_train // (5 * batch_size))
+                division_step = (n_train // (1 * batch_size))
                 if division_step > 0:
                     if global_step % division_step == 0:
                         histograms = {}
@@ -154,9 +154,9 @@ def train_model(
                         try:
                             experiment.log({
                                 'learning rate': optimizer.param_groups[0]['lr'],
-                                'validation Dice': val_score,
+                                'validation Loss': val_score,
                                 'images': wandb.Image(images[0].cpu()),
-                                'masks': {
+                                'Heat map': {
                                     'true': wandb.Image(true_masks[0].float().cpu()),
                                     'pred': wandb.Image(masks_pred[0].float().cpu()),
                                 },
@@ -179,7 +179,7 @@ def get_args():
     parser = argparse.ArgumentParser(description='Train the UNet on images and target masks')
     parser.add_argument('--epochs', '-e', metavar='E', type=int, default=50, help='Number of epochs')
     parser.add_argument('--batch-size', '-b', dest='batch_size', metavar='B', type=int, default=16, help='Batch size')
-    parser.add_argument('--learning-rate', '-l', metavar='LR', type=float, default=1e-3,
+    parser.add_argument('--learning-rate', '-l', metavar='LR', type=float, default=5e-4,
                         help='Learning rate', dest='lr')
     parser.add_argument('--load', '-f', type=str, default=False, help='Load model from a .pth file')
     parser.add_argument('--scale', '-s', type=float, default=0.5, help='Downscaling factor of the images')
