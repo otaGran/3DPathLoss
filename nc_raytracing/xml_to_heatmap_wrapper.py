@@ -1,25 +1,25 @@
 import subprocess
 import concurrent
-from concurrent.futures import wait
+from concurrent.futures import wait, as_completed
 import os
 import time
 import multiprocessing
 from PIL import Image
 #import tensorflow as tf
 import numpy as np
-
+from tqdm import tqdm
 # Import Sionna RT components
 #from sionna.rt import load_scene, Transmitter, Receiver, PlanarArray, Camera, Paths2CIR
 
 # testing new Blender_command_line function written on 23. Jun 2023
-BASE_PATH_BLENDER = 'res/'
-BASE_PATH_SIONNA = 'Sionna_coverage_maps/coverage_maps_building_map_test_Jul4/'
+BASE_PATH_BLENDER = '/dev/shm/res_plane/'
+BASE_PATH_SIONNA = '/dev/shm/coverage_maps_building_map_test_Jul4/'
 
 # un-comment 
 # BASE_PATH_BLENDER = 'res/res_23Jun23/'
 # BASE_PATH_SIONNA = 'Sionna_coverage_maps/coverage_maps_new_22Jun23/'
 # START_FROM_IDX = 512
-NUM_OF_PROCESS = 1
+NUM_OF_PROCESS = 12
 EXTRA_HEIGHT = 2
 
 
@@ -168,11 +168,11 @@ if __name__ == '__main__':
                    if os.path.isdir(BASE_PATH_BLENDER + 'Bl_xml_files/' + f)]
     print('Number of xml files:', len(f_names_xml))
     # f[0:-5] to remove the tiff
-    f_names_sig_map = [f[0:-5] for f in os.listdir(BASE_PATH_SIONNA)
+    f_names_sig_map = [f[0:-4] for f in os.listdir(BASE_PATH_SIONNA)
                        if os.path.isfile(BASE_PATH_SIONNA + f)]
     print('Number of finished signal maps:', len(f_names_sig_map))
     futures = []
-    # print(f_names_sig_map)
+    print(f_names_sig_map)
     
     
     
@@ -202,12 +202,14 @@ if __name__ == '__main__':
     gpu_seq_queue = multiprocessing.Queue()
     for i in range(NUM_OF_PROCESS):
         gpu_seq_queue.put(i%2)
-        
+    pbar = tqdm(total=len(f_names_xml), desc='xml_to_heatmap')  # Init pbar
+    pbar.update(len(f_names_sig_map))
+    count = 0
     with concurrent.futures.ProcessPoolExecutor(max_workers=NUM_OF_PROCESS, initializer=initializer_func, initargs=(gpu_seq_queue,1)) as executor:
         for idx, f_name_xml in enumerate(f_names_xml):
             if f_name_xml not in f_names_sig_map:  # skip cmaps that have already been generated
                 # Running as sub-process:
-               
+                count+=1
                 futures.append(executor.submit(subprocess.run,
                                                 ['python', 'xml_to_heatmap_one_run.py',
                                                  '--height_file', str(f_name_xml) + '.txt',
@@ -217,8 +219,7 @@ if __name__ == '__main__':
                                                  '--BASE_PATH_SIONNA', str(BASE_PATH_SIONNA),
                                                  '--outer_idx', str(idx)],
                                                  capture_output=True, text=True))
-                if idx >=4:
-                    break
+            
                 # Running as a function in this file.
                 # futures.append(executor.submit(sionna_run,
                 #                               str(f_name_xml) + '.txt',
@@ -233,8 +234,9 @@ if __name__ == '__main__':
                 #     wait(futures)
                 # continue
             # print('Skipping:', f_name_xml, idx)
-
+        for _ in as_completed(futures):
+            pbar.update(n=1)  # Increments counter
     wait(futures)
-    for ft in futures:
-        print(str(ft.result()).replace('\\n','\n'))
+    # for ft in futures:
+    #     print(str(ft.result()).replace('\\n','\n'))
     print('DONE')

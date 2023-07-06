@@ -99,7 +99,7 @@ def cm_routine(extra_height, f_ptr_height):
                                   polarization="cross")
         # Add a transmitter
         tx = Transmitter(name="tx",
-                      position=[0, 0, height_at_origin+extra_height+15],
+                      position=[0, 0, height_at_origin+5],
                       orientation=[0, 0, 0])
         scene.add(tx)
 
@@ -108,7 +108,7 @@ def cm_routine(extra_height, f_ptr_height):
 
         # Compute coverage map
         start_loc = time.time()
-        cm = scene.coverage_map(max_depth=8, cm_center=[0, 0, height_at_origin+extra_height], cm_orientation=[0, 0, 0],
+        cm = scene.coverage_map(max_depth=8, cm_center=[0, 0, extra_height], cm_orientation=[0, 0, 0],
                                 cm_cell_size=[args.cm_cell_size, args.cm_cell_size], cm_size=[1000, 1000])
         # print('compute cm time: ', str(time.time() - start_loc))
         # Visualize coverage in preview
@@ -123,14 +123,11 @@ def save_routine(cm, img_path):
         cm_tensor = cm.as_tensor()
         cm_2D = cm_tensor.numpy()[0, :, :]
         
-        # saving as dB and tiff
-        # cm_2D[cm_2D == 0] = np.nan
+
         cm_2D_dB = 10*np.log10(cm_2D)
-        # cm_img = Image.fromarray(cm_2D_dB)
-        # cm_img.save(img_path)
-        
+  
         # saving as power and npy
-        np.save(img_path, cm_2D_dB)
+        np.save(img_path, np.flip(cm_2D_dB,0))
         return
     except Exception as e:
         raise e
