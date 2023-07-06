@@ -12,7 +12,7 @@ import argparse
 import numpy as np
 
 if '--' in sys.argv:
-    argv = sys.argv[sys.argv.index('--')+1:]
+    argv = sys.argv[sys.argv.index('--') + 1:]
 parser = argparse.ArgumentParser()
 parser.add_argument('-i', '--idx', type=int, required=True)
 parser.add_argument('-l', '--minLon', type=float, required=True)
@@ -31,7 +31,7 @@ args = parser.parse_known_args(argv)[0]
 
 # this is the path where the results are stored (terrain_npy, building_npy, height files, Mitsuba_export)
 BASE_PATH = args.BASE_PATH  # '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res/'
-terrain_to_npy_ERROR = -100
+
 
 def install_package(package_name):
     try:
@@ -49,6 +49,7 @@ def install_package(package_name):
         return
     except Exception as e:
         raise e
+
 
 # install_package("pillow")
 # install_package("mitsuba==3.0.1")
@@ -213,6 +214,7 @@ def add_plane(material_name, size=1100):
     except Exception as e:
         raise e
 
+
 def replace_material(obj_data, mat_src, mat_dest):
     try:
         for iii in range(len(obj_data.materials)):
@@ -225,14 +227,14 @@ def replace_material(obj_data, mat_src, mat_dest):
 
 
 def change_material_names_and_export(wall_name, roof_name, f_path, export='y'):
+    print('\n\n\nstarting change material names and export\n\n\n')
     try:
-        obj_names = [obj.name for obj in list(bpy.data.objects)]
-        if len(obj_names) <= 2:
+        if len([obj.name for obj in list(bpy.data.objects)]) <= 2:
             return 1
 
         obj_names = []
         for obj in list(bpy.data.objects):
-            if 'Camera' in obj.name or 'Terrain' in obj.name or 'osm_buildings' in obj.name or 'Plane' in obj.name:
+            if 'Camera' in obj.name or 'Terrain' in obj.name or 'osm_buildings' in obj.name or 'Plane' == obj.name:
                 continue
             obj_names.append(obj.name)
         # check that there's more than one object
@@ -258,7 +260,8 @@ def change_material_names_and_export(wall_name, roof_name, f_path, export='y'):
                     for mat_idx in range(len(list(obj_data.materials))):
 
                         bpy.data.objects[obj_name].active_material_index = mat_idx
-                        if bpy.data.objects[obj_name].active_material.name == 'wall' or bpy.data.objects[obj_name].active_material.name == 'roof':
+                        if bpy.data.objects[obj_name].active_material.name == 'wall' or bpy.data.objects[
+                            obj_name].active_material.name == 'roof':
                             if bpy.data.objects[obj_name].active_material.name == 'wall':
                                 mat_destination = bpy.data.materials[wall_name]
                             else:
@@ -267,8 +270,9 @@ def change_material_names_and_export(wall_name, roof_name, f_path, export='y'):
                             replace_material(obj_data, mat_source, mat_destination)
                             # replace mat_source with mat_destination
                         else:
-                            if len(list(obj_data.materials)) > 2:
-                                bpy.ops.object.material_slot_remove()
+                            print('not wall or roof', bpy.data.objects[obj_name],
+                                  bpy.data.objects[obj_name].active_material)
+                            print('num mat:', len(list(obj_data.materials)), list(obj_data.materials))
                             if len(list(obj_data.materials)) == 2:
                                 if mat_idx == 0:
                                     mat_destination = bpy.data.materials[wall_name]
@@ -276,6 +280,9 @@ def change_material_names_and_export(wall_name, roof_name, f_path, export='y'):
                                     mat_destination = bpy.data.materials[roof_name]
                                 mat_source = bpy.data.materials[bpy.data.objects[obj_name].active_material.name]
                                 replace_material(obj_data, mat_source, mat_destination)
+                            if len(list(obj_data.materials)) > 2:
+                                bpy.data.objects[obj_name].data.materials.pop(index=mat_idx)
+                            print('after replacement:', len(list(obj_data.materials)), list(obj_data.materials))
                 except AttributeError:
                     print('AttributeError', bpy.data.objects[obj_name], bpy.data.objects[obj_name].active_material)
                     # un-linking object.
@@ -283,6 +290,7 @@ def change_material_names_and_export(wall_name, roof_name, f_path, export='y'):
                     bpy.data.objects.remove(obj_to_delete, do_unlink=True)
                 except RuntimeError as err:
                     print('RuntimeError', bpy.data.objects[obj_name], bpy.data.objects[obj_name].active_material)
+                    print(err)
                     obj_to_delete = bpy.data.objects[obj_name]
                     bpy.data.objects.remove(obj_to_delete, do_unlink=True)
                     # raise err
@@ -291,6 +299,23 @@ def change_material_names_and_export(wall_name, roof_name, f_path, export='y'):
         bpy.ops.object.select_all(action='DESELECT')
         # bpy.ops.object.mode_set(mode='OBJECT')
         # export
+        # for obj_name in obj_names:
+        #     try:
+        #         obj_data = bpy.data.objects[obj_name].data
+        #         for mat_idx in range(len(list(obj_data.materials))):
+        #             bpy.data.objects[obj_name].active_material_index = mat_idx
+        #             if bpy.data.objects[obj_name].active_material.name == wall_name or \
+        #                     bpy.data.objects[obj_name].active_material.name == roof_name:
+        #                 continue
+        #                 # replace mat_source with mat_destination
+        #             else:
+        #                 obj_to_delete = bpy.data.objects[obj_name]
+        #                 bpy.data.objects.remove(obj_to_delete, do_unlink=True)
+        #     except RuntimeError as err:
+        #         print(err)
+        #         print('RuntimeError (2)', bpy.data.objects[obj_name], bpy.data.objects[obj_name].active_material)
+        #     except KeyError:
+        #         print('KeyError (2)')
         if export == 'y' and f_path is not None:
             bpy.ops.export_scene.mitsuba(filepath=f_path, axis_forward='Y', axis_up='Z')
         return 0
@@ -298,11 +323,11 @@ def change_material_names_and_export(wall_name, roof_name, f_path, export='y'):
         raise e
 
 
-def squarify_photo(arr):
+def squarify_photo(arr, trim=0):
     try:
         arr = np.asarray(arr)
         rrr, ccc = arr.shape
-        min_rc = min([rrr, ccc])
+        min_rc = min([rrr, ccc]) - trim
         return arr[int((rrr - min_rc) / 2):int((rrr + min_rc) / 2), int((ccc - min_rc) / 2):int((ccc + min_rc) / 2)]
     except Exception as e:
         raise e
@@ -452,14 +477,13 @@ def get_height_at_origin(camera_height=2000, normalise_to_256='n', decimate='n',
 
         height_arr = camera_height - depth
         height_square = squarify_photo(height_arr)
-        # building_height = height_square - terrain_height
         return height_at_origin
     except Exception as e:
         raise e
 
 
-def get_height_buildings(loc_args_dict, from_file='n', osm_filepath=None, cam_ht=2000, cam_ortho_scale=2000,
-                        decimate='y', decimate_factor=8):
+def get_height_buildings_b4_terrain(loc_args_dict, from_file='n', osm_filepath=None, cam_ht=2000, cam_ortho_scale=2000,
+                                    decimate='y', decimate_factor=8):
     # this should be called before most other functions in run()
     add_osm(**loc_args_dict, from_file=from_file, osmFilepath=osm_filepath)
     add_camera_and_set(camera_height=cam_ht, camera_orthoScale=cam_ortho_scale)
@@ -469,6 +493,19 @@ def get_height_buildings(loc_args_dict, from_file='n', osm_filepath=None, cam_ht
     building_depth = take_picture_and_get_depth()
     building_depth[building_depth > 65500] = cam_ht
     building_depth_sqr = squarify_photo(building_depth)
+    building_ht_arr = cam_ht - building_depth_sqr
+    if decimate == 'y':
+        building_ht_arr = building_ht_arr[::decimate_factor, ::decimate_factor]
+    return building_ht_arr
+
+
+def get_height_buildings_after_import(cam_ht=2000, cam_ortho_scale=2000, decimate='y', decimate_factor=8):
+    add_camera_and_set(camera_height=cam_ht, camera_orthoScale=cam_ortho_scale)
+    # assumes camera has already been placed
+    building_depth = take_picture_and_get_depth()
+    # print(squarify_photo(building_depth, trim=118))
+    building_depth[building_depth > 65500] = cam_ht
+    building_depth_sqr = squarify_photo(building_depth, trim=0)
     building_ht_arr = cam_ht - building_depth_sqr
     if decimate == 'y':
         building_ht_arr = building_ht_arr[::decimate_factor, ::decimate_factor]
@@ -506,36 +543,69 @@ def get_floats_from_coordsFile(line):
 
 def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_factor,
         use_path_osm='n'):
-    try:
-        decimate = 'n'
-        if decimate_factor != 1:
-            decimate = 'y'
-        # bpy.ops.wm.read_userpref()
-        delete_all_in_collection()
-        loc_args_dict = {'maxLon': maxLon, 'minLon': minLon, 'maxLat': maxLat, 'minLat': minLat}
-        osm_f_path = args.BLENDER_OSM_DOWNLOAD_PATH + args.idx_uuid + '.osm'
-        building_ht_fixed = get_height_buildings(loc_args_dict, from_file=use_path_osm, osm_filepath=osm_f_path,
-                                                 cam_ht=2000, cam_ortho_scale=2000, decimate=decimate,
-                                                 decimate_factor=decimate_factor)
-        delete_all_in_collection()
+    if args.terrain_or_plane == 'plane':
+        try:
+            decimate = 'n'
+            if decimate_factor != 1:
+                decimate = 'y'
+            osm_f_path = args.BLENDER_OSM_DOWNLOAD_PATH + args.idx_uuid + '.osm'
+            delete_all_in_collection()
 
-        # path of xml file which would be exported in change_material_names_and_export
-        save_name = args.idx_uuid
+            # path of xml file which would be exported in change_material_names_and_export
+            save_name = args.idx_uuid
+            building_img_path = BASE_PATH + 'Bl_building_npy/' + save_name + '.npy'
 
-        HeightAtOrigin_path = BASE_PATH + 'height_at_origin/' + save_name + '.txt'  # 'HeightAtOrigin.txt'
+            # if args.terrain_or_plane == 'plane':
+            add_plane(material_name='itu_concrete', size=1100)
 
-        # should follow maxLon, minLon, maxLat, minLat
-        diff = 0.0015
-        loc_args_dict = {'maxLon': maxLon + diff, 'minLon': minLon - diff, 'maxLat': maxLat + diff,
-                         'minLat': minLat - diff}
+            loc_args_dict = {'maxLon': maxLon, 'minLon': minLon, 'maxLat': maxLat, 'minLat': minLat}
+            # use already-downloaded osm is only selected when both from_file=='y' and osmFilepath is not None
+            add_osm(**loc_args_dict, from_file=use_path_osm, osmFilepath=osm_f_path)
 
-        terrainImgPATH = BASE_PATH + 'Bl_terrain_npy/' + save_name + '.npy'
-        buildingImgPATH = BASE_PATH + 'Bl_building_npy/' + save_name + '.npy'
+            # change_material_names_and_export WRITES the XML file as well as the Meshes
+            export_path = BASE_PATH + 'Bl_xml_files/' + save_name + '/' + save_name + '.xml'
+            ret = change_material_names_and_export(wall_name='itu_brick', roof_name='itu_plasterboard',
+                                                   f_path=export_path, export='y')
+            if ret != 0:
+                raise Exception('Not enough objects in scene for change_material_names_and_export.')
 
-        if args.terrain_or_plane == 'plane':
-            add_plane(material_name='itu_concrete')
-            terrain_save = 'n'
-        if args.terrain_or_plane == 'terrain':
+            # building height is an image containing the building height and nothing else
+            building_ht_arr = get_height_buildings_after_import(cam_ht=2000, cam_ortho_scale=2000, decimate=decimate,
+                                                                decimate_factor=decimate_factor)
+            if run_idx != -1:
+                building_height_arr_int16 = building_ht_arr.astype(np.int16)
+                np.save(building_img_path, building_height_arr_int16)
+        except Exception as e:
+            raise e
+
+    if args.terrain_or_plane == 'terrain':
+        try:
+            decimate = 'n'
+            if decimate_factor != 1:
+                decimate = 'y'
+            # bpy.ops.wm.read_userpref()
+            delete_all_in_collection()
+            loc_args_dict = {'maxLon': maxLon, 'minLon': minLon, 'maxLat': maxLat, 'minLat': minLat}
+            osm_f_path = args.BLENDER_OSM_DOWNLOAD_PATH + args.idx_uuid + '.osm'
+            building_ht_fixed = \
+                get_height_buildings_b4_terrain(loc_args_dict, from_file=use_path_osm, osm_filepath=osm_f_path,
+                                                cam_ht=2000, cam_ortho_scale=2000, decimate=decimate,
+                                                decimate_factor=decimate_factor)
+            delete_all_in_collection()
+
+            # path of xml file which would be exported in change_material_names_and_export
+            save_name = args.idx_uuid
+
+            height_at_origin_path = BASE_PATH + 'height_at_origin/' + save_name + '.txt'  # 'HeightAtOrigin.txt'
+
+            # should follow maxLon, minLon, maxLat, minLat
+            diff = 0.0015
+            loc_args_dict = {'maxLon': maxLon + diff, 'minLon': minLon - diff, 'maxLat': maxLat + diff,
+                             'minLat': minLat - diff}
+
+            terrain_img_path = BASE_PATH + 'Bl_terrain_npy/' + save_name + '.npy'
+            building_img_path = BASE_PATH + 'Bl_building_npy/' + save_name + '.npy'
+
             add_terrain(material_name='itu_concrete', **loc_args_dict)
             # terrain_limits WRITES the terrain height information as png
             # increase camera_orthoScale to increase image size.
@@ -547,44 +617,40 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
             # if terrain_save=='n' then terrainImg is not returned.
             print(len(terrain_limits))
             terrain_arr = terrain_limits[-1]
-        if args.terrain_or_plane != 'plane' and args.terrain_or_plane != 'terrain':
-            print('terrain_or_plane arg is wrong')
-            raise KeyboardInterrupt
 
-        loc_args_dict = {'maxLon': maxLon, 'minLon': minLon, 'maxLat': maxLat, 'minLat': minLat}
-        # use already-downloaded osm is only selected when both from_file=='y' and osmFilepath is not None
-        add_osm(**loc_args_dict, from_file=use_path_osm, osmFilepath=osm_f_path)
+            loc_args_dict = {'maxLon': maxLon, 'minLon': minLon, 'maxLat': maxLat, 'minLat': minLat}
+            # use already-downloaded osm is only selected when both from_file=='y' and osmFilepath is not None
+            add_osm(**loc_args_dict, from_file=use_path_osm, osmFilepath=osm_f_path)
 
-        # change_material_names_and_export WRITES the XML file as well as the Meshes
-        export_path = BASE_PATH + 'Bl_xml_files/' + save_name + '/' + save_name + '.xml'
-        ret = change_material_names_and_export(wall_name='itu_brick', roof_name='itu_plasterboard', f_path=export_path,
-                                               export='y')
+            # change_material_names_and_export WRITES the XML file as well as the Meshes
+            export_path = BASE_PATH + 'Bl_xml_files/' + save_name + '/' + save_name + '.xml'
+            ret = change_material_names_and_export(wall_name='itu_brick', roof_name='itu_plasterboard',
+                                                   f_path=export_path,
+                                                   export='y')
+            if ret != 0:
+                raise Exception('Not enough objects in scene for change_material_names_and_export.')
 
-        if ret != 0:
-            raise Exception('Not enough objects in scene for change_material_names_and_export.')
+            # building height is an image containing the building height and nothing else
+            # note: this function outputs wavy buildings, since the building height is constant even on top of terrain
+            height_at_origin = get_height_at_origin(camera_height=2000, decimate=decimate,
+                                                    decimate_factor=decimate_factor)
 
-        # building height is an image containing the building height and nothing else
-        # note: this function outputs wavy buildings, since the building height is constant even on top of terrain
-        height_at_origin = get_height_at_origin(camera_height=2000, decimate=decimate,
-                                                decimate_factor=decimate_factor)
-
-        if run_idx != -1:
-            f_ptr_HeightAtOrigin = open(HeightAtOrigin_path, 'w')
-            f_ptr_HeightAtOrigin.write(
-                '({:f},{:f},{:f},{:f}),{:f},{:.1f},'.format(minLon, maxLat, maxLon, minLat, buildingToAreaRatio,
-                                                            height_at_origin) + save_name + '\n')
-            f_ptr_HeightAtOrigin.close()
-            if args.terrain_or_plane == 'terrain':
+            if run_idx != -1:
+                f_ptr_HeightAtOrigin = open(height_at_origin_path, 'w')
+                f_ptr_HeightAtOrigin.write(
+                    '({:f},{:f},{:f},{:f}),{:f},{:.1f},'.format(minLon, maxLat, maxLon, minLat, buildingToAreaRatio,
+                                                                height_at_origin) + save_name + '\n')
+                f_ptr_HeightAtOrigin.close()
                 terrain_arr_int16 = terrain_arr.astype(np.int16)
-            if args.terrain_or_plane == 'plane':
-                terrain_arr_int16 = np.zeros((int(1080/decimate_factor), int(1080/decimate_factor))).astype(np.int16)
-            building_height_arr_int16 = building_ht_fixed.astype(np.int16)
-            np.save(terrainImgPATH, terrain_arr_int16)
-            np.save(buildingImgPATH, building_height_arr_int16)
-        # delete_terrain_and_osm_files()
-    except Exception as e:
-        raise e
-    return
+                building_height_arr_int16 = building_ht_fixed.astype(np.int16)
+                np.save(terrain_img_path, terrain_arr_int16)
+                np.save(building_img_path, building_height_arr_int16)
+            # delete_terrain_and_osm_files()
+        except Exception as e:
+            raise e
+        return
+    if args.terrain_or_plane != 'plane' and args.terrain_or_plane != 'terrain':
+        raise Exception('terrain or plane?')
 
 
 try:
