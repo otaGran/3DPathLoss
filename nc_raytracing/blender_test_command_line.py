@@ -247,11 +247,12 @@ def change_material_names_and_export(wall_name, roof_name, f_path, export='y'):
             mat_roof = bpy.data.materials.get(roof_name)
             if mat_roof is None:
                 bpy.data.materials.new(name=roof_name)
+            bpy.ops.object.select_all(action='DESELECT')
             for obj_name in obj_names:
                 obj_data = bpy.data.objects[obj_name].data
                 # bpy.ops.object.select_all(action='DESELECT')
                 try:
-                    if len(list(obj_data.materials)) == 0:
+                    if len(list(obj_data.materials)) <= 1:
                         obj_to_delete = bpy.data.objects[obj_name]
                         bpy.data.objects.remove(obj_to_delete, do_unlink=True)
                     for mat_idx in range(len(list(obj_data.materials))):
@@ -266,8 +267,15 @@ def change_material_names_and_export(wall_name, roof_name, f_path, export='y'):
                             replace_material(obj_data, mat_source, mat_destination)
                             # replace mat_source with mat_destination
                         else:
-                            bpy.ops.object.material_slot_remove()
-                    bpy.data.objects[obj_name].select_set(False)
+                            if len(list(obj_data.materials)) > 2:
+                                bpy.ops.object.material_slot_remove()
+                            if len(list(obj_data.materials)) == 2:
+                                if mat_idx == 0:
+                                    mat_destination = bpy.data.materials[wall_name]
+                                if mat_idx == 1:
+                                    mat_destination = bpy.data.materials[roof_name]
+                                mat_source = bpy.data.materials[bpy.data.objects[obj_name].active_material.name]
+                                replace_material(obj_data, mat_source, mat_destination)
                 except AttributeError:
                     print('AttributeError', bpy.data.objects[obj_name], bpy.data.objects[obj_name].active_material)
                     # un-linking object.
