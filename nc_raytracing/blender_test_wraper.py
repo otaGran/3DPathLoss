@@ -49,7 +49,7 @@ if __name__ == '__main__':
         for idx, line in enumerate(lines):
             if idx < START_FROM_IDX:
                 continue
-            if idx >= STOP_AT_IDX:
+            if idx >= STOP_AT_IDX != -1:
                 break
             # file format: (minLon,maxLat,maxLon,minLat),percent,idx_uuid\n
             minLonOut, maxLatOut, maxLonOut, minLatOut, percent, idx_uuid = splitting_a_line(lll=line, uuid_incl='y')
