@@ -31,7 +31,7 @@ args = parser.parse_known_args(argv)[0]
 
 # this is the path where the results are stored (terrain_npy, building_npy, height files, Mitsuba_export)
 BASE_PATH = args.BASE_PATH  # '/Users/zeyuli/Desktop/Duke/0. Su23_Research/Blender_stuff/res/'
-
+CAMERA_ORTHO_SCALE = 1920
 
 def install_package(package_name):
     try:
@@ -333,7 +333,8 @@ def squarify_photo(arr, trim=0):
         raise e
 
 
-def terrain_to_npy(outer_idx, save='n', camera_height=2000, camera_orthoScale=2000, decimate='n', decimate_factor=8):
+def terrain_to_npy(outer_idx, save='n', camera_height=2000, camera_orthoScale=CAMERA_ORTHO_SCALE, decimate='n',
+                   decimate_factor=8):
     """
     The important part: returns terrain_height as np array.
     """
@@ -462,7 +463,7 @@ def get_height_at_origin(camera_height=2000, normalise_to_256='n', decimate='n',
     """
     try:
         if args.terrain_or_plane == 'plane':
-            add_camera_and_set(camera_height, camera_orthoScale=2000)
+            add_camera_and_set(camera_height, camera_orthoScale=CAMERA_ORTHO_SCALE)
         depth = take_picture_and_get_depth()  # values that are greater than 65500 have inf depth
         depth[depth > 65500] = camera_height
 
@@ -482,8 +483,8 @@ def get_height_at_origin(camera_height=2000, normalise_to_256='n', decimate='n',
         raise e
 
 
-def get_height_buildings_b4_terrain(loc_args_dict, from_file='n', osm_filepath=None, cam_ht=2000, cam_ortho_scale=2000,
-                                    decimate='y', decimate_factor=8):
+def get_height_buildings_b4_terrain(loc_args_dict, from_file='n', osm_filepath=None, cam_ht=2000,
+                                    cam_ortho_scale=CAMERA_ORTHO_SCALE, decimate='y', decimate_factor=8):
     # this should be called before most other functions in run()
     add_osm(**loc_args_dict, from_file=from_file, osmFilepath=osm_filepath)
     add_camera_and_set(camera_height=cam_ht, camera_orthoScale=cam_ortho_scale)
@@ -499,13 +500,13 @@ def get_height_buildings_b4_terrain(loc_args_dict, from_file='n', osm_filepath=N
     return building_ht_arr
 
 
-def get_height_buildings_after_import(cam_ht=2000, cam_ortho_scale=2000, decimate='y', decimate_factor=8):
+def get_height_buildings_after_import(cam_ht=2000, cam_ortho_scale=CAMERA_ORTHO_SCALE, decimate='y', decimate_factor=8):
     add_camera_and_set(camera_height=cam_ht, camera_orthoScale=cam_ortho_scale)
     # assumes camera has already been placed
     building_depth = take_picture_and_get_depth()
     # print(squarify_photo(building_depth, trim=118))
     building_depth[building_depth > 65500] = cam_ht
-    building_depth_sqr = squarify_photo(building_depth, trim=0)
+    building_depth_sqr = squarify_photo(building_depth, trim=80)
     building_ht_arr = cam_ht - building_depth_sqr
     if decimate == 'y':
         building_ht_arr = building_ht_arr[::decimate_factor, ::decimate_factor]
@@ -570,8 +571,8 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
                 raise Exception('Not enough objects in scene for change_material_names_and_export.')
 
             # building height is an image containing the building height and nothing else
-            building_ht_arr = get_height_buildings_after_import(cam_ht=2000, cam_ortho_scale=2000, decimate=decimate,
-                                                                decimate_factor=decimate_factor)
+            building_ht_arr = get_height_buildings_after_import(cam_ht=2000, cam_ortho_scale=CAMERA_ORTHO_SCALE,
+                                                                decimate=decimate, decimate_factor=decimate_factor)
             if run_idx != -1:
                 building_height_arr_int16 = building_ht_arr.astype(np.int16)
                 np.save(building_img_path, building_height_arr_int16)
@@ -589,7 +590,7 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
             osm_f_path = args.BLENDER_OSM_DOWNLOAD_PATH + args.idx_uuid + '.osm'
             building_ht_fixed = \
                 get_height_buildings_b4_terrain(loc_args_dict, from_file=use_path_osm, osm_filepath=osm_f_path,
-                                                cam_ht=2000, cam_ortho_scale=2000, decimate=decimate,
+                                                cam_ht=2000, cam_ortho_scale=CAMERA_ORTHO_SCALE, decimate=decimate,
                                                 decimate_factor=decimate_factor)
             delete_all_in_collection()
 
@@ -613,7 +614,8 @@ def run(maxLon, minLon, maxLat, minLat, run_idx, buildingToAreaRatio, decimate_f
 
             # terrain_limits contains min_x, max_x, min_y, max_y, terrain_height
             terrain_limits = terrain_to_npy(save=terrain_save, outer_idx=run_idx, camera_height=2000,
-                                            camera_orthoScale=2000, decimate=decimate, decimate_factor=decimate_factor)
+                                            camera_orthoScale=CAMERA_ORTHO_SCALE, decimate=decimate,
+                                            decimate_factor=decimate_factor)
             # if terrain_save=='n' then terrainImg is not returned.
             print(len(terrain_limits))
             terrain_arr = terrain_limits[-1]
