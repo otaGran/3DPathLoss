@@ -13,6 +13,19 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 
 
+
+
+
+from scipy.constants import speed_of_light
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+import math
+
+
+
+
 def load_image(filename):
     ext = splitext(filename)[1]
     if ext == '.npy':
@@ -40,27 +53,29 @@ def load_image(filename):
 
 class RTDataset(Dataset):
     def __init__(self, building_height_map_dir: str, terrain_height_map_dir: str,
-                 ground_truth_signal_strength_map_dir: str, scale: float = 1.0, mask_suffix: str = ''):
+                 ground_truth_signal_strength_map_dir: str, scale: float = 1.0, mask_suffix: str = '', pathloss: bool = False):
         self.building_height_map_dir = Path(building_height_map_dir)
         self.terrain_height_map_dir = Path(terrain_height_map_dir)
         self.ground_truth_signal_strength_map_dir = Path(ground_truth_signal_strength_map_dir)
+        self.pathloss = pathloss
 
         assert 0 < scale <= 1, 'Scale must be between 0 and 1'
         self.scale = scale
         self.mask_suffix = mask_suffix
 
-        ids_gt = [splitext(file)[0].split("_")[0] for file in listdir(self.ground_truth_signal_strength_map_dir) if
+        ids_gt = [splitext(file)[0] for file in listdir(self.ground_truth_signal_strength_map_dir) if
                   isfile(join(self.ground_truth_signal_strength_map_dir, file)) and not file.startswith(
                       '.')]
         ids_building = [splitext(file)[0].split("_")[0] for file in listdir(self.building_height_map_dir) if
                         isfile(join(self.building_height_map_dir, file)) and not file.startswith(
                             '.')]
-        ids_terrain = [splitext(file)[0].split("_")[0] for file in listdir(self.terrain_height_map_dir) if
-                       isfile(join(self.terrain_height_map_dir, file)) and not file.startswith(
-                           '.')]
-
-        self.ids = list(set(ids_gt).intersection(ids_building).intersection(ids_terrain))
-        print(self.ids)
+        # ids_terrain = [splitext(file)[0].split("_")[0] for file in listdir(self.terrain_height_map_dir) if
+        #                isfile(join(self.terrain_height_map_dir, file)) and not file.startswith(
+        #                    '.')]
+        
+        self.ids = ids_gt
+        #print(self.ids)
+        
         if not self.ids:
             raise RuntimeError(
                 f'No input file found in {self.ground_truth_signal_strength_map_dir}, make sure you put your images there')
@@ -107,24 +122,84 @@ class RTDataset(Dataset):
     #             img = img / 255.0
     #
     #         return img
+    def get_ids(self):
+        return self.ids
+    
+    @staticmethod
+    def uma_los(d3d, d2d, dbp, fc, h_b, h_t):
+        # 38.901 UMa LOS
+        PL1 = 28+22*np.log10(d3d)+20*np.log10(fc)
+        PL2 = 28+40*np.log10(d3d)+20*np.log10(fc) - 9*np.log10(dbp**2+(h_b - h_t)**2)
+        PL = np.zeros((d3d.shape))
+        PL = PL2 # Default pathloss
+        PL[(np.greater_equal(d2d,10) & np.less_equal(d2d,dbp))] = PL1[(np.greater_equal(d2d,10) & np.less_equal(d2d,dbp))] # Overwrite if distance is greater than 10 meters or smaller than dbp
+        return PL
+    
+    
+    @staticmethod
+    def uma_nlos(d3d, d2d, dbp, fc, h_b, h_t):
+        # 38901 UMa NLOS
+        PL_nlos = 13.54+39.08*np.log10(d3d)+20*np.log10(fc)-0.6*(h_t-1.5)
+        PL = np.zeros((d3d.shape))
+        PL = np.maximum(RTDataset.uma_los(d3d, d2d, dbp, fc, h_b, h_t), PL_nlos)
+        return PL
+    
+    @staticmethod
+    def pathloss_38901(distance, frequency, h_bs=30, h_ut=1.5):
+        #print(distance)
+        """
+            Simple path loss model for computing RSRP based on distance.
+
+            fc: frequency in GHz
+            h_b: height of basestation
+            h_t: height of UT
+        """
+        # Constants
+        fc = frequency
+        h_b =  h_bs # 30 meters
+        h_t =  h_ut # 1.5
+
+        # 2D distance 
+        d2d = distance
+
+        # 3D distance
+        h_e = h_b - h_t # effective height
+        d3d = np.sqrt(d2d**2+h_e**2)
+
+        # Breakpoint distance
+        dbp =  4*h_b*h_t*fc*10e8/speed_of_light
+
+        loss = RTDataset.uma_nlos(d3d, d2d, dbp, fc, h_b, h_t)
+        return loss
 
     def __getitem__(self, idx):
         name = self.ids[idx]
-        building_height_file = list(self.building_height_map_dir.glob(name + '_*.*'))
-        terrain_height_file = list(self.terrain_height_map_dir.glob(name + '_*.*'))
-        ground_truth_file = list(self.ground_truth_signal_strength_map_dir.glob(name + '_*.npy'))
+        name_splited = name.split("_")
+        file_name_id_part = name_splited[0]
+        tx_height = name_splited[-1]
+        tx_x = int(name_splited[-3])+500
+        tx_y = (-1 * int(name_splited[-2]))+500
+        tx_position = [tx_x // 10, tx_y // 10]
+        #print(name)
+        #print(tx_position)
+
+        #print(tx_position)
+        
+        building_height_file = list(self.building_height_map_dir.glob(file_name_id_part + '_*.*'))
+        # terrain_height_file = list(self.terrain_height_map_dir.glob(name + '_*.*'))
+        ground_truth_file = list(self.ground_truth_signal_strength_map_dir.glob(name + '.npy'))
 
         assert len(
             building_height_file) == 1, f'Either no image or multiple images found for the ID {name}: {building_height_file}'
-        assert len(
-            terrain_height_file) == 1, f'Either no mask or multiple masks found for the ID {name}: {terrain_height_file}'
+        # assert len(
+        #     terrain_height_file) == 1, f'Either no mask or multiple masks found for the ID {name}: {terrain_height_file}'
         assert len(
             ground_truth_file) == 1, f'Either no mask or multiple masks found for the ID {name}: {ground_truth_file}'
 
 
         # Ori image size 1040 * 1040, crop to 1000 * 1000
         building_height_arr = load_image(building_height_file[0])[4:104,4:104]
-        terrain_height_arr = load_image(terrain_height_file[0])[4:104,4:104]
+        # terrain_height_arr = load_image(terrain_height_file[0])[4:104,4:104]
 
 
 
@@ -135,20 +210,46 @@ class RTDataset(Dataset):
         ground_truth_arr[ground_truth_arr <= -160] = -160
 
         # Since right now GT.size is 100*100 and other two size is 1000 * 1000, just check the input.
-        assert building_height_arr.shape == terrain_height_arr.shape, \
-            f'Image and mask {name} should be the same size, but are {building_height_arr.shape} and {terrain_height_arr.shape}'
+        # assert building_height_arr.shape == terrain_height_arr.shape, \
+        #     f'Image and mask {name} should be the same size, but are {building_height_arr.shape} and {terrain_height_arr.shape}'
+        
+        # 3 Channels of image, 
+        #   1.Building Height
+        #   2.TX position
+        #   3.Building Height
+        combined_input = np.zeros((3, 100, 100))
+        
+        
+        # Construct the TX position channel
+        tx_position_channel = np.full((100, 100), 0, dtype=int)
+        tx_position_channel[tx_position[1]][tx_position[0]] = tx_height
+        combined_input[1,:, :] = tx_position_channel
+        # Construct the Path Loss Model (3GPP TR 308.91 nLos UMa)
+        path_loss_heat_map = np.full((100, 100), 0, dtype=int)
+        
 
-        # building_height_arr = self.preprocess(building_height_arr)
-        # terrain_height_arr = self.preprocess(terrain_height_arr)
-        # ground_truth_arr = self.preprocess(self.mask_values, ground_truth_arr, self.scale, is_mask=True)
-        #combined_input = np.zeros((2, 100, 100))
-        combined_input = np.zeros((1, 100, 100))
-        combined_input[0,:, :] = building_height_arr  # Assign first channel data
-        #combined_input[1,:, :] = terrain_height_arr  # Assign second channel data
+                
+        # Combine all the channels together
+        combined_input[0,:, :] = building_height_arr 
+        distance = np.arange(0, 145,1)
+        path_loss_res =  RTDataset.pathloss_38901(distance,2.14, h_bs=int(tx_height), h_ut=2)
+        for row in range(path_loss_heat_map.shape[0]):
+            for col in range(path_loss_heat_map.shape[1]):
+                # Compute the distance between pixel and tx
+                dist = math.sqrt((tx_position[1] - row)**2 + (tx_position[0] - col)**2)
+                path_loss_heat_map[row][col] = -1 * path_loss_res[int(dist)]
+        combined_input[2,:, :] = path_loss_heat_map 
+         
+        
+        #combined_input[1,:, :] = terrain_height_arr  
         return {
             'combined_input': torch.as_tensor(combined_input.copy()).float().contiguous(),
-            'ground_truth': torch.as_tensor(ground_truth_arr.copy()).long().contiguous()
+            'ground_truth': torch.as_tensor(ground_truth_arr.copy()).long().contiguous(),
+            'file_name': name
         }
+    
+    
+    
 
 
 if __name__ == '__main__':

@@ -5,11 +5,12 @@ import torch.nn as nn
 
 
 class UNet(nn.Module):
-    def __init__(self, n_channels, n_classes, bilinear=False):
+    def __init__(self, n_channels, n_classes, bilinear=False, pathloss=False):
         super(UNet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
         self.bilinear = bilinear
+        self.pathloss = pathloss
 
 
         self.inc = (DoubleConv(n_channels, 64))
@@ -25,6 +26,9 @@ class UNet(nn.Module):
         self.outc = (OutConv(64, n_classes))
 
     def forward(self, x):
+        back_x = x.clone().detach()
+        x = x[:,0:2,:,:]
+        #print(x.size())
         x1 = self.inc(x)
         x2 = self.down1(x1)
         x3 = self.down2(x2)
@@ -35,7 +39,15 @@ class UNet(nn.Module):
         x = self.up3(x, x2)
         x = self.up4(x, x1)
         logits = self.outc(x)
-        return logits
+        # print(logits.size())
+        # print(back_x.size())
+        # print(back_x[:,1,:,:].reshape(logits.size()).size())
+        # #exit()
+        
+        if self.pathloss:
+            return logits * back_x[:,2,:,:].reshape(logits.size())
+        else:
+            return logits
 
     def use_checkpointing(self):
         self.inc = torch.utils.checkpoint(self.inc)

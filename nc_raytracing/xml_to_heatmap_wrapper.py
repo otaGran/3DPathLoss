@@ -13,17 +13,87 @@ from tqdm import tqdm
 
 # testing new Blender_command_line function written on 23. Jun 2023
 BASE_PATH_BLENDER = '/dev/shm/res_plane/'
-BASE_PATH_SIONNA = '/dev/shm/coverage_maps_building_map_test_Jul4/'
-
+BASE_PATH_SIONNA = '/dev/shm/coverage_maps_data_aug_Jul18/'
+# BASE_PATH_BLENDER = '/home/yl826/3DPathLoss/nc_raytracing/res_0706_plane_missing/'
+# BASE_PATH_SIONNA = '/home/yl826/3DPathLoss/nc_raytracing/Sionna_coverage_maps/coverage_maps_plane_missing_Jul6/'
 # un-comment 
 # BASE_PATH_BLENDER = 'res/res_23Jun23/'
 # BASE_PATH_SIONNA = 'Sionna_coverage_maps/coverage_maps_new_22Jun23/'
 # START_FROM_IDX = 512
-NUM_OF_PROCESS = 12
+
+
+NUM_OF_PROCESS = 20
 EXTRA_HEIGHT = 2
 
 
-# def sionna_run(height_file, extra_height, cm_cell_size, BASE_PATH_BLENDER, BASE_PATH_SIONNA, outer_idx):
+def initializer_func(gpu_seq_queue: multiprocessing.Queue, log_level: int) -> None:
+    """
+    This is a initializer function run after the creation of each process in ProcessPoolExecutor, 
+    to set the os env variable to limit the visiablity of GPU for each process inorder to achieve 
+    the load balance bewteen diff GPU
+    :gpu_seq_queue This is a queue storing the GPU ID as a token, each process will only get 
+    """
+    import os
+    
+    gpu_id = gpu_seq_queue.get()
+    print("Initlizing the process: %d with GPU: %d"%(os.getpid(),gpu_id))
+    
+    # Configure which GPU
+    os.environ["CUDA_VISIBLE_DEVICES"] = f"{gpu_id}"
+    
+if __name__ == '__main__':
+    
+    f_names_xml = [f for f in os.listdir(BASE_PATH_BLENDER + 'Bl_xml_files/')
+                   if os.path.isdir(BASE_PATH_BLENDER + 'Bl_xml_files/' + f)]
+    print('Number of xml files:', len(f_names_xml))
+    
+    
+    # f[0:-4] to remove the ".npy" from file name
+    f_names_sig_map = [f[0:-4] for f in os.listdir(BASE_PATH_SIONNA)
+                       if os.path.isfile(BASE_PATH_SIONNA + f)]
+    #print('Number of finished signal maps:', len(f_names_sig_map))
+    futures = []
+    #print(f_names_sig_map)
+    
+    # Create a GPU ID token Queue
+    gpu_seq_queue = multiprocessing.Queue()
+    NUMBER_OF_GPU = 2
+    for i in range(NUM_OF_PROCESS):
+        gpu_seq_queue.put(i%NUMBER_OF_GPU)
+    
+    # Init pbar
+    pbar = tqdm(total=len(f_names_xml), desc='xml_to_heatmap')
+    count = 0
+    # Init process pool executor
+    with concurrent.futures.ProcessPoolExecutor(max_workers=NUM_OF_PROCESS, initializer=initializer_func, initargs=(gpu_seq_queue,1)) as executor:
+        for idx, f_name_xml in enumerate(f_names_xml):
+            if f_name_xml not in f_names_sig_map:  # skip cmaps that have already been generated
+                """
+                Creating a subprocess for each job running in process pool
+                This is the simples way I can find to free up the GPU memory and do a load balance betwenn each GPU
+                """
+                futures.append(executor.submit(subprocess.run,
+                                                ['python', 'xml_to_heatmap_one_run.py',
+                                                 '--file_name_wo_type', str(f_name_xml),
+                                                 '--extra_height', str(EXTRA_HEIGHT),
+                                                 '--cm_cell_size', str(10),
+                                                 '--BASE_PATH_BLENDER', str(BASE_PATH_BLENDER),
+                                                 '--BASE_PATH_SIONNA', str(BASE_PATH_SIONNA),
+                                                 '--outer_idx', str(idx)],
+                                                 capture_output=True, text=True))
+                
+            # print('Skipping:', f_name_xml, idx)
+        for idx, future in enumerate(as_completed(futures)):
+            pbar.update(n=1)  
+            try:
+                data = str(future.result()).replace('\\n','\n')
+                print('\n\n\n\n\n' + str(idx) + '\n' + data + '\n\n\n\n\n')
+            except Exception as err:
+                print(err)
+    print('DONE')
+    
+    
+    # def sionna_run(height_file, extra_height, cm_cell_size, BASE_PATH_BLENDER, BASE_PATH_SIONNA, outer_idx):
 #     """
 #         Base path for the Blender files. The height files, pngs, and xml folders should be in BASE_PATH.
 #         Organisation: BASE_PATH/Bl_terrain_img/, BASE_PATH/Bl_xml_files/, BASE_PATH/height_at_origin/,
@@ -156,87 +226,3 @@ EXTRA_HEIGHT = 2
 #     except Exception as e:
 #         print(e)
 #     return
-    
-def initializer_func(gpu_seq_queue: multiprocessing.Queue, log_level: int) -> None:
-    import os # Configure which GPU
-    gpu_id = gpu_seq_queue.get()
-    print("Initlizing the process: %d with GPU: %d"%(os.getpid(),gpu_id))
-    os.environ["CUDA_VISIBLE_DEVICES"] = f"{gpu_id}"
-    
-if __name__ == '__main__':
-    f_names_xml = [f for f in os.listdir(BASE_PATH_BLENDER + 'Bl_xml_files/')
-                   if os.path.isdir(BASE_PATH_BLENDER + 'Bl_xml_files/' + f)]
-    print('Number of xml files:', len(f_names_xml))
-    # f[0:-5] to remove the tiff
-    f_names_sig_map = [f[0:-4] for f in os.listdir(BASE_PATH_SIONNA)
-                       if os.path.isfile(BASE_PATH_SIONNA + f)]
-    print('Number of finished signal maps:', len(f_names_sig_map))
-    futures = []
-    print(f_names_sig_map)
-    
-    
-    
-    
-    
-    
-    """
-    for idx, f_name_xml in enumerate(f_names_xml):
-        if f_name_xml not in f_names_sig_map:
-            try:
-                sionna_run(f_name_xml+'.txt', EXTRA_HEIGHT, 10, BASE_PATH_BLENDER, BASE_PATH_SIONNA, idx)
-                break
-            except Exception as e:
-                print(e)
-    """  
-            
-            
-            
-            
-            
-    """
-        Comment out the second call to futures.append using sionna_run if you want to run xml_to_heatmap_one_run
-        as a subprocess. 
-        sionna_run duplicates the functionalities of xml_to_heatmap_one_run without having to run 
-        xml_to_heatmap_one_run as a subprocess. 
-    """
-    gpu_seq_queue = multiprocessing.Queue()
-    for i in range(NUM_OF_PROCESS):
-        gpu_seq_queue.put(i%2)
-    pbar = tqdm(total=len(f_names_xml), desc='xml_to_heatmap')  # Init pbar
-    pbar.update(len(f_names_sig_map))
-    count = 0
-    with concurrent.futures.ProcessPoolExecutor(max_workers=NUM_OF_PROCESS, initializer=initializer_func, initargs=(gpu_seq_queue,1)) as executor:
-        for idx, f_name_xml in enumerate(f_names_xml):
-            if f_name_xml not in f_names_sig_map:  # skip cmaps that have already been generated
-                # Running as sub-process:
-                count+=1
-                futures.append(executor.submit(subprocess.run,
-                                                ['python', 'xml_to_heatmap_one_run.py',
-                                                 '--height_file', str(f_name_xml) + '.txt',
-                                                 '--extra_height', str(EXTRA_HEIGHT),
-                                                 '--cm_cell_size', str(10),
-                                                 '--BASE_PATH_BLENDER', str(BASE_PATH_BLENDER),
-                                                 '--BASE_PATH_SIONNA', str(BASE_PATH_SIONNA),
-                                                 '--outer_idx', str(idx)],
-                                                 capture_output=True, text=True))
-            
-                # Running as a function in this file.
-                # futures.append(executor.submit(sionna_run,
-                #                               str(f_name_xml) + '.txt',
-                #                               EXTRA_HEIGHT,
-                #                              10,
-                #                               BASE_PATH_BLENDER,
-                #                               BASE_PATH_SIONNA,
-                #                               idx))
-
-                # print('Doing:', f_name_xml, idx)
-                # if len(futures) % 10 == 0:
-                #     wait(futures)
-                # continue
-            # print('Skipping:', f_name_xml, idx)
-        for _ in as_completed(futures):
-            pbar.update(n=1)  # Increments counter
-    wait(futures)
-    # for ft in futures:
-    #     print(str(ft.result()).replace('\\n','\n'))
-    print('DONE')

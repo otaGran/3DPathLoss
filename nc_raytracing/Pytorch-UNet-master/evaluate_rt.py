@@ -21,9 +21,23 @@ def evaluate(net, dataloader, device, amp):
             mask_true = mask_true.to(device=device, dtype=torch.long)
 
             # predict the mask
-            mask_pred = net(image)
+            coverage_map_pred = net(image)
             criterion = nn.MSELoss()
-            dice_score += torch.sqrt(criterion(mask_pred.squeeze(1), mask_true.float()))
+            
+            building_mask = image.clone().squeeze(1)
+            building_mask = building_mask[:,0,:,:].squeeze(1)
+            building_mask[building_mask != 0] = 1
+            building_mask = building_mask.bool()
+            #print(building_mask)
+            #print(true_masks.size())
+
+            # Apply the mask on coverage_map_pred
+            masked_coverage_map_pred = coverage_map_pred.squeeze(1)
+            #print(masked_coverage_map_pred.size())
+            #print(building_mask.size())
+            masked_coverage_map_pred[masked_coverage_map_pred < -160] = -160
+            masked_coverage_map_pred[building_mask] = mask_true.float()[building_mask]
+            dice_score += torch.sqrt(criterion(masked_coverage_map_pred, mask_true.float()))
 
             # if net.n_classes == 1:
             #     assert mask_true.min() >= 0 and mask_true.max() <= 1, 'True mask indices should be in [0, 1]'
