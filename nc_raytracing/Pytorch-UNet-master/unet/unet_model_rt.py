@@ -2,11 +2,15 @@
 
 from .unet_parts import *
 import torch.nn as nn
-
+from .pointnet_model import *
 
 class UNet(nn.Module):
     def __init__(self, n_channels, n_classes, bilinear=False, pathloss=False):
         super(UNet, self).__init__()
+
+        self.pointnet = PointNetCls(k=2, feature_transform=True)
+
+
         self.n_channels = n_channels
         self.n_classes = n_classes
         self.bilinear = bilinear
