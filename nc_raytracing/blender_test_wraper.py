@@ -13,12 +13,13 @@ BLENDER_PATH = os.environ.get('BLENDER_PATH')
 BLENDER_COMMAND_LINE_PATH = os.environ.get('BLENDER_COMMAND_LINE_PATH')
 BLENDER_OSM_DOWNLOAD_PATH = os.environ.get('BLENDER_OSM_DOWNLOAD_PATH')
 START_FROM_IDX = 0
-STOP_AT_IDX = -1
+STOP_AT_IDX = 5
 NUM_OF_PROCESS = 5
 DECIMATE_FACTOR = 1
 TERRAIN_OR_PLANE = 'plane'
 RES_FILE_NAME = os.environ.get('RES_FILE_NAME')
-
+MITSUBA_EXPORT_BUILDINGS = 'y'  # controls whether mitsuba will export the XML file
+XML_TO_BUILDING_MAP = 'y'  # controls whether to use existing XML to produce building map
 
 def splitting_a_line(lll, uuid_incl='n'):
     lll = lll.replace('(', '')
@@ -40,19 +41,23 @@ if __name__ == '__main__':
     os.makedirs(BASE_PATH + 'Bl_terrain_npy/', exist_ok=True)
     os.makedirs(BASE_PATH + 'Bl_building_npy/', exist_ok=True)
     os.makedirs(BASE_PATH + 'Bl_xml_files/', exist_ok=True)
-    # f_names_xml = [f for f in os.listdir(BASE_PATH + 'Bl_xml_files/')
-    #                 if os.path.isdir(BASE_PATH + 'Bl_xml_files/' + f) and f != '.DS_Store']
+    idx_uuid_xml = [f for f in os.listdir(BASE_PATH + 'Bl_xml_files/')
+                    if os.path.isdir(BASE_PATH + 'Bl_xml_files/' + f) and f != '.DS_Store']
     with open(BASE_PATH + RES_FILE_NAME, 'r') as loc_fPtr:
         lines = loc_fPtr.readlines()
     futures = []
     with concurrent.futures.ProcessPoolExecutor(max_workers=NUM_OF_PROCESS) as executor:
         for idx, line in enumerate(lines):
+            minLonOut, maxLatOut, maxLonOut, minLatOut, percent, idx_uuid = splitting_a_line(lll=line, uuid_incl='y')
             if idx < START_FROM_IDX:
                 continue
             if idx >= STOP_AT_IDX != -1:
                 break
+            if XML_TO_BUILDING_MAP == 'y':
+                import_path = BASE_PATH + 'Bl_xml_files/' + idx_uuid + '/' + idx_uuid + '.xml'
+                if not os.path.exists(import_path):
+                    continue  # skip idx_uuids that didn't get exported to XML files in previous runs
             # file format: (minLon,maxLat,maxLon,minLat),percent,idx_uuid\n
-            minLonOut, maxLatOut, maxLonOut, minLatOut, percent, idx_uuid = splitting_a_line(lll=line, uuid_incl='y')
             print(' '.join([BLENDER_PATH,  # "--background",
                             "--python",
                             BLENDER_COMMAND_LINE_PATH.replace(' ', '\ '), "--",
@@ -66,23 +71,29 @@ if __name__ == '__main__':
                             "--BASE_PATH", str(BASE_PATH).replace(' ', '\ '),
                             "--BLENDER_OSM_DOWNLOAD_PATH", str(BLENDER_OSM_DOWNLOAD_PATH).replace(' ', '\ '),
                             "--idx_uuid", str(idx_uuid),
-                            '--terrain_or_plane', TERRAIN_OR_PLANE]))
+                            '--terrain_or_plane', TERRAIN_OR_PLANE,
+                            '--export_buildings', MITSUBA_EXPORT_BUILDINGS,
+                            '--xml_to_building_map', XML_TO_BUILDING_MAP]))
             futures.append(executor.submit(
                 subprocess.run,
-                [BLENDER_PATH, "--background",
-                 "--python",
-                 BLENDER_COMMAND_LINE_PATH, "--",
-                 "--idx", str(idx),
-                 "--minLon", str(minLonOut),
-                 "--maxLat", str(maxLatOut),
-                 "--maxLon", str(maxLonOut),
-                 "--minLat", str(minLatOut),
-                 "--building_to_area_ratio", str(percent),
-                 "--decimate_factor", str(DECIMATE_FACTOR),
-                 "--BASE_PATH", str(BASE_PATH),
-                 "--BLENDER_OSM_DOWNLOAD_PATH", str(BLENDER_OSM_DOWNLOAD_PATH),
-                 "--idx_uuid", str(idx_uuid),
-                 '--terrain_or_plane', TERRAIN_OR_PLANE],
+                [
+                     BLENDER_PATH, "--background",
+                     "--python",
+                     BLENDER_COMMAND_LINE_PATH, "--",
+                     "--idx", str(idx),
+                     "--minLon", str(minLonOut),
+                     "--maxLat", str(maxLatOut),
+                     "--maxLon", str(maxLonOut),
+                     "--minLat", str(minLatOut),
+                     "--building_to_area_ratio", str(percent),
+                     "--decimate_factor", str(DECIMATE_FACTOR),
+                     "--BASE_PATH", str(BASE_PATH),
+                     "--BLENDER_OSM_DOWNLOAD_PATH", str(BLENDER_OSM_DOWNLOAD_PATH),
+                     "--idx_uuid", str(idx_uuid),
+                     '--terrain_or_plane', TERRAIN_OR_PLANE,
+                     '--export_buildings', MITSUBA_EXPORT_BUILDINGS,
+                     '--xml_to_building_map', XML_TO_BUILDING_MAP,
+                 ],
                 capture_output=True, text=True))
         for idx, future in enumerate(concurrent.futures.as_completed(futures)):
             try:
