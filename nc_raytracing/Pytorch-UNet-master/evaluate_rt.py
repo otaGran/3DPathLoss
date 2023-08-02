@@ -15,13 +15,15 @@ def evaluate(net, dataloader, device, amp):
     with torch.autocast(device.type if device.type != 'mps' else 'cpu', enabled=amp):
         for batch in tqdm(dataloader, total=num_val_batches, desc='Validation round', unit='batch', leave=False):
             image, mask_true = batch['combined_input'], batch['ground_truth']
-
+            sparse_ss = batch['sparse_ss']
+            
             # move images and labels to correct device and type
             image = image.to(device=device, dtype=torch.float32, memory_format=torch.channels_last)
             mask_true = mask_true.to(device=device, dtype=torch.long)
-
+            sparse_ss = sparse_ss.to(device=device, dtype=torch.float32)
+            
             # predict the mask
-            coverage_map_pred = net(image)
+            coverage_map_pred = net(image, sparse_ss)
             criterion = nn.MSELoss()
             
             building_mask = image.clone().squeeze(1)
@@ -37,7 +39,7 @@ def evaluate(net, dataloader, device, amp):
             #print(building_mask.size())
             masked_coverage_map_pred[masked_coverage_map_pred < -160] = -160
             masked_coverage_map_pred[building_mask] = mask_true.float()[building_mask]
-            dice_score += torch.sqrt(criterion(masked_coverage_map_pred, mask_true.float()))
+            dice_score += torch.sqrt(criterion(coverage_map_pred.squeeze(1), mask_true.float()))
 
             # if net.n_classes == 1:
             #     assert mask_true.min() >= 0 and mask_true.max() <= 1, 'True mask indices should be in [0, 1]'

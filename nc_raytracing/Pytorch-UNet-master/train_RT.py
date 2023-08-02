@@ -30,14 +30,26 @@ from torch.masked import masked_tensor, as_masked_tensor
 from sklearn.model_selection import train_test_split
 
 
+from torch.utils.tensorboard import SummaryWriter
+
+from datetime import datetime
+
+import numpy as np
+
 
 dir_checkpoint = Path('./checkpoints/')
 
-building_height_map_dir = os.path.abspath('../res_plane/Bl_building_npy')
-terrain_height_map_dir = os.path.abspath('../res_plane/Bl_terrain_npy')
-ground_truth_signal_strength_map_dir = os.path.abspath('/dev/shm/coverage_maps_data_aug_Jul7/')
+building_height_map_dir = os.path.abspath('/dev/shm/res_plane/Bl_building_npy')
+terrain_height_map_dir = os.path.abspath('/dev/shm/res_plane/Bl_terrain_npy')
+ground_truth_signal_strength_map_dir = os.path.abspath('/dev/shm/coverage_maps_data_aug_Jul18/')
+sparse_ss_dir = Path('/home/yl826/3DPathLoss/nc_raytracing/jul18_sparse')
 
 
+def linear2dB(x):
+    
+    res = 10 * np.log10(x)
+    res[res == np.nan] = -160
+    return res
 
 
 
@@ -57,14 +69,19 @@ def train_model(
         gradient_clipping: float = 1.0,
         pathloss = False,
         pathloss_multi_modality = False,
-        start_epoch = 0
+        start_epoch = 0,
+        median_filter_size = 0
 ):
+    
+    # 0. Ignore the numpy warning
+    np.seterr(divide = 'ignore') 
+    
+    
     # 1. Create dataset
 
-    dataset = RTDataset(building_height_map_dir, terrain_height_map_dir,ground_truth_signal_strength_map_dir, img_scale, pathloss = pathloss)
+    dataset = RTDataset(building_height_map_dir, terrain_height_map_dir,ground_truth_signal_strength_map_dir,sparse_ss_dir, img_scale, pathloss = pathloss, median_filter_size = median_filter_size)
     
 
-    
     
         
 
@@ -114,7 +131,7 @@ def train_model(
     val_loader = DataLoader(val_set, shuffle=False, drop_last=True, **loader_args)
    
     # (Initialize logging)
-    experiment = wandb.init(project='U-Net_RT', resume='allow', anonymous='must')
+    experiment = wandb.init(project='U-Net_RT', resume='allow', anonymous='must', sync_tensorboard=True)
     experiment.config.update(
         {"epochs":epochs, 
              "batch_size":batch_size, 
@@ -125,9 +142,13 @@ def train_model(
              "amp":amp, 
              "samples_size":len(dataset),
              "Pre-processing wiht Path Loss Model":pathloss_multi_modality,
-             "Multi-modality with Path Loss Model":pathloss
+             "Multi-modality with Path Loss Model":pathloss,
+             "tensorboard_log_dir":os.path.join("logs", datetime.now().strftime("%Y%m%d-%H%M%S")),
+             "median_filter_size":median_filter_size
+             
         }
     )
+    
 
     logging.info(f'''Starting training:
         Epochs:          {epochs}
@@ -148,21 +169,27 @@ def train_model(
     optimizer = optim.Adam(model.parameters(),
                               lr=learning_rate, weight_decay=weight_decay, foreach=True)
     
-    # optimizer = optim.RMsporp(model.parameters(),
+    # optimizer = optim.RMSprop(model.parameters(),
     #                           lr=learning_rate, weight_decay=weight_decay, momentum=momentum, foreach=True)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5,eps=1e-9)  # goal: maximize Dice score
     grad_scaler = torch.cuda.amp.GradScaler(enabled=amp)
     criterion = nn.MSELoss()
     global_step = 0
 
+    
+    writer = SummaryWriter(experiment.config.tensorboard_log_dir)
+    
+    log_model_arch = True
     # 5. Begin training
     for epoch in range(1, epochs + 1):
         model.train()
+
         epoch_loss = 0
         with tqdm(total=n_train, desc=f'Epoch {epoch}/{epochs}', unit='img', leave=False) as pbar:
             for batch in train_loader:
                 images, true_masks_cpu = batch['combined_input'], batch['ground_truth']
-
+                sparse_ss = batch['sparse_ss']
+                
                 # assert images.shape[1] == model.n_channels, \
                 #     f'Network has been defined with {model.n_channels} input channels, ' \
                 #     f'but loaded images have {images.shape[1]} channels. Please check that ' \
@@ -170,9 +197,14 @@ def train_model(
 
                 images = images.to(device=device, dtype=torch.float32, memory_format=torch.channels_last)
                 true_masks = true_masks_cpu.to(device=device, dtype=torch.long)
+                sparse_ss = sparse_ss.to(device=device, dtype=torch.float32)
+                if log_model_arch:
+                    log_model_arch = False
+                    writer.add_graph(model, [images, sparse_ss])
 
+                    writer.close()
                 with torch.autocast(device.type if device.type != 'mps' else 'cpu', enabled=amp):
-                    coverage_map_pred = model(images)
+                    coverage_map_pred = model(images, sparse_ss )
                     # RMSE instead of MSE since the data is spread
                     # Only compute the loss on out door points
                     
@@ -194,7 +226,7 @@ def train_model(
                     masked_coverage_map_pred[building_mask] = true_masks.float()[building_mask]
                     
                     
-                    loss = torch.sqrt(criterion(masked_coverage_map_pred.squeeze(1), true_masks.float()))
+                    loss = torch.sqrt(criterion(coverage_map_pred.squeeze(1), true_masks.float()))
 
 
 
@@ -221,7 +253,21 @@ def train_model(
                         histograms = {}
                         for tag, value in model.named_parameters():
                             tag = tag.replace('/', '.')
-                            if not (torch.isinf(value) | torch.isnan(value)).any():
+                            none_res = (value.grad is None)
+                            for tmp_value in value:
+                                
+                                if tmp_value.grad is None:
+                                    none_res = True
+                                    #print(tag)
+                                    #print(tmp_value)
+                                    #print(tmp_value.grad)
+                                    #print()
+                                    break
+                            if none_res:
+                                continue
+                                
+                                
+                            if not(torch.isinf(value) | torch.isnan(value)).any():
                                 histograms['Weights/' + tag] = wandb.Histogram(value.data.cpu())
                             if not (torch.isinf(value.grad) | torch.isnan(value.grad)).any():
                                 histograms['Gradients/' + tag] = wandb.Histogram(value.grad.data.cpu())
@@ -233,22 +279,24 @@ def train_model(
                         logging.info('Validation Dice score: {}'.format(val_score))
                         coverage_map_pred_cpu = coverage_map_pred.clone().detach().squeeze(1).cpu().numpy()
                         fig = plt.figure()
-                        plt.imshow(coverage_map_pred_cpu[0],vmin=-110,vmax=0)
+                        plt.imshow((coverage_map_pred_cpu[0]),vmin=-110,vmax=0)
                         plt.colorbar()
+                        print(coverage_map_pred_cpu[0])
+                        print((coverage_map_pred_cpu[0]))
                         
                         fig2 = plt.figure()
-                        plt.imshow(true_masks_cpu[0],vmin=-110,vmax=0)
+                        plt.imshow((true_masks_cpu[0].numpy()),vmin=-110,vmax=0)
                         plt.colorbar()
                         
                         fig3 = plt.figure()
-                        plt.imshow(coverage_map_pred_cpu[0])
+                        plt.imshow((coverage_map_pred_cpu[0]))
                         plt.colorbar()
                         
                         
                         masked_coverage_map_pred_cpu = masked_coverage_map_pred.clone().detach().squeeze(1).cpu().numpy()
     
                         fig4 = plt.figure()
-                        plt.imshow(masked_coverage_map_pred_cpu[0],vmin=-110,vmax=0)
+                        plt.imshow((masked_coverage_map_pred_cpu[0]),vmin=-110,vmax=0)
                         plt.colorbar()
                 
                         
@@ -259,7 +307,10 @@ def train_model(
                         
                         
                         fig6 = plt.figure()
-                        plt.imshow(images[0,2].cpu())
+                        tttmp = images[0,2].cpu().numpy()
+                        plt.imshow((tttmp))
+                        
+                        print(np.sum(tttmp[tttmp != 0.0]))
                         plt.colorbar()
                         #plt.title(batch['file_name'][0])
                         try:
@@ -294,7 +345,7 @@ def train_model(
         torch.save(state_dict, str(dir_checkpoint / 'checkpoint_epoch{}.pth'.format(epoch)))
         logging.info(f'Checkpoint {epoch} saved!')
         #logging.info('Training loss score: {}'.format(val_score))
-
+    #writer.close()
 
 def get_args():
     parser = argparse.ArgumentParser(description='Train the UNet on images and target masks')
@@ -310,9 +361,11 @@ def get_args():
     parser.add_argument('--bilinear', action='store_true', default=False, help='Use bilinear upsampling')
     parser.add_argument('--classes', '-c', type=int, default=2, help='Number of classes')
     parser.add_argument('--pathloss',action='store_true', default=False , help='Using the Path Loss Model(3GPP TR 38.901) to pre process the input TX information')
-    parser.add_argument('--pathloss_multi_modality',action='store_true', default=True , help='Apply Path Loss Model(3GPP TR 38.901) on the end of model forward.')
+    parser.add_argument('--pathloss_multi_modality',action='store_true', default=False , help='Apply Path Loss Model(3GPP TR 38.901) on the end of model forward.')
     parser.add_argument('--start-epoch', type=int, default=0,
                         help='Logging wandb with the start of epoch x', dest='start_epoch')
+    parser.add_argument('--median-filter-size', type=int, default=0,
+                        help='Applying median filter on the ground truth with filter size', dest='median_filter_size')
 
     return parser.parse_args()
 
@@ -321,7 +374,7 @@ if __name__ == '__main__':
     args = get_args()
 
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     #device = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
@@ -352,7 +405,8 @@ if __name__ == '__main__':
             amp=args.amp,
             pathloss=args.pathloss,
             pathloss_multi_modality=args.pathloss_multi_modality,
-            start_epoch=args.start_epoch
+            start_epoch=args.start_epoch,
+            median_filter_size = args.median_filter_size
         )
     except torch.cuda.OutOfMemoryError:
         logging.error('Detected OutOfMemoryError! '

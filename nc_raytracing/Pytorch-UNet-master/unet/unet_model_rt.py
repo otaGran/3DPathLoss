@@ -8,8 +8,8 @@ class UNet(nn.Module):
     def __init__(self, n_channels, n_classes, bilinear=False, pathloss=False):
         super(UNet, self).__init__()
 
-        self.pointnet = PointNetCls(k=2, feature_transform=True)
-
+        self.pointnet = PointNetfeat(global_feat=True, feature_transform=True)
+        
 
         self.n_channels = n_channels
         self.n_classes = n_classes
@@ -23,14 +23,17 @@ class UNet(nn.Module):
         self.down3 = (Down(256, 512))
         factor = 2 if bilinear else 1
         self.down4 = (Down(512, 1024 // factor))
-        self.up1 = (Up(1024, 512 // factor, bilinear))
+        self.up1 = (Up(1024, 512 // factor, bilinear, pointnet_in_channels=1052))
         self.up2 = (Up(512, 256 // factor, bilinear))
         self.up3 = (Up(256, 128 // factor, bilinear))
         self.up4 = (Up(128, 64, bilinear))
         self.outc = (OutConv(64, n_classes))
 
-    def forward(self, x):
+    def forward(self, x, sparse_ss):
         back_x = x.clone().detach()
+        sparse_ss = sparse_ss.transpose(2, 1)
+        sparse_ss, _, _ = self.pointnet(sparse_ss)
+        #print(sparse_ss.shape)
         x = x[:,0:2,:,:]
         #print(x.size())
         x1 = self.inc(x)
@@ -38,6 +41,15 @@ class UNet(nn.Module):
         x3 = self.down2(x2)
         x4 = self.down3(x3)
         x5 = self.down4(x4)
+        
+    
+        
+        pad_sparse_ss = torch.zeros(sparse_ss.shape[0], 6*6*29).to(x)
+        pad_sparse_ss[:,:1024] = sparse_ss
+        #pad_sparse_ss = torch.reshape(pad_sparse_ss, (sparse_ss.shape[0],29,6,6))
+        pad_sparse_ss = torch.reshape(sparse_ss[:,:28*6*6], (sparse_ss.shape[0],28,6,6))
+        x5 = torch.cat((x5, pad_sparse_ss), 1)
+        
         x = self.up1(x5, x4)
         x = self.up2(x, x3)
         x = self.up3(x, x2)
@@ -49,7 +61,7 @@ class UNet(nn.Module):
         # #exit()
         
         if self.pathloss:
-            return logits * back_x[:,2,:,:].reshape(logits.size())
+            return logits + back_x[:,2,:,:].reshape(logits.size())
         else:
             return logits
 

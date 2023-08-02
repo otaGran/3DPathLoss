@@ -22,8 +22,9 @@ import matplotlib.pyplot as plt
 
 
 import math
+import os
 
-
+from scipy import ndimage
 
 
 def load_image(filename):
@@ -49,15 +50,21 @@ def load_image(filename):
 #         return np.unique(mask, axis=0)
 #     else:
 #         raise ValueError(f'Loaded masks should have 2 or 3 dimensions, found {mask.ndim}')
-
+NUM_OF_POINTS = 200
 
 class RTDataset(Dataset):
     def __init__(self, building_height_map_dir: str, terrain_height_map_dir: str,
-                 ground_truth_signal_strength_map_dir: str, scale: float = 1.0, mask_suffix: str = '', pathloss: bool = False):
+                 ground_truth_signal_strength_map_dir: str,sparse_ss_dir: str, scale: float = 1.0, mask_suffix: str = '', pathloss: bool = False, median_filter_size: int = 0):
+        np.seterr(divide = 'ignore') 
         self.building_height_map_dir = Path(building_height_map_dir)
         self.terrain_height_map_dir = Path(terrain_height_map_dir)
         self.ground_truth_signal_strength_map_dir = Path(ground_truth_signal_strength_map_dir)
+        
+        self.sparse_ss_dir = Path(sparse_ss_dir)
+        
         self.pathloss = pathloss
+        
+        self.median_filter_size = median_filter_size
 
         assert 0 < scale <= 1, 'Scale must be between 0 and 1'
         self.scale = scale
@@ -74,6 +81,16 @@ class RTDataset(Dataset):
         #                    '.')]
         
         self.ids = ids_gt
+        
+        
+        # Here is a work around of tf variable length length in a single bath problem
+        filtered_ids = []
+        for file in tqdm(ids_gt):
+            tmp = np.load(os.path.join(self.sparse_ss_dir,file.split("\\")[-1]+".npy"))
+            if len(tmp) >= NUM_OF_POINTS:
+                filtered_ids.append(file)
+        self.ids = filtered_ids
+                                                                         
         #print(self.ids)
         
         if not self.ids:
@@ -124,7 +141,7 @@ class RTDataset(Dataset):
     #         return img
     def get_ids(self):
         return self.ids
-    
+
     @staticmethod
     def uma_los(d3d, d2d, dbp, fc, h_b, h_t):
         # 38.901 UMa LOS
@@ -188,7 +205,11 @@ class RTDataset(Dataset):
         building_height_file = list(self.building_height_map_dir.glob(file_name_id_part + '_*.*'))
         # terrain_height_file = list(self.terrain_height_map_dir.glob(name + '_*.*'))
         ground_truth_file = list(self.ground_truth_signal_strength_map_dir.glob(name + '.npy'))
-
+        
+        
+        sparse_ss_file = list(self.sparse_ss_dir.glob(name + '.npy'))
+        
+        
         assert len(
             building_height_file) == 1, f'Either no image or multiple images found for the ID {name}: {building_height_file}'
         # assert len(
@@ -196,7 +217,11 @@ class RTDataset(Dataset):
         assert len(
             ground_truth_file) == 1, f'Either no mask or multiple masks found for the ID {name}: {ground_truth_file}'
 
-
+        assert len(
+            sparse_ss_file) == 1, f'Either no mask or multiple masks found for the ID {name}: {sparse_ss_file}'
+        
+        
+        
         # Ori image size 1040 * 1040, crop to 1000 * 1000
         building_height_arr = load_image(building_height_file[0])[4:104,4:104]
         # terrain_height_arr = load_image(terrain_height_file[0])[4:104,4:104]
@@ -204,20 +229,32 @@ class RTDataset(Dataset):
 
 
         ground_truth_arr = load_image(ground_truth_file[0])
+        
+        
+        if self.median_filter_size != 0:
+            ground_truth_arr = ndimage.median_filter(ground_truth_arr, size = self.median_filter_size)
+        
+        
+        
+        sparse_ss_arr = np.array(load_image(sparse_ss_file[0]))
+        choice = np.random.choice(len(sparse_ss_arr), NUM_OF_POINTS, replace=True)
+        sparse_ss_arr = sparse_ss_arr[choice, :]
+        # #Convert the linear power to dB scale
+        #sparse_ss_arr = 10 * np.log10(sparse_ss_arr)
+        
+        #Convert the linear power to dB scale
+        ground_truth_arr = 10 * np.log10(ground_truth_arr)
+        
+        
+        ground_truth_arr[ground_truth_arr == np.nan] = -160
         ground_truth_arr[ground_truth_arr == -np.inf] = -160
         ground_truth_arr = np.nan_to_num(ground_truth_arr, nan=0)
         ground_truth_arr[ground_truth_arr >= 0] = 0
         ground_truth_arr[ground_truth_arr <= -160] = -160
 
         # Since right now GT.size is 100*100 and other two size is 1000 * 1000, just check the input.
-        # assert building_height_arr.shape == terrain_height_arr.shape, \
-        #     f'Image and mask {name} should be the same size, but are {building_height_arr.shape} and {terrain_height_arr.shape}'
-        
-        # 3 Channels of image, 
-        #   1.Building Height
-        #   2.TX position
-        #   3.Building Height
-        combined_input = np.zeros((3, 100, 100))
+        # assert building_height_arr.shape == terrain_height_aimport loggin
+        combined_input = np.zeros((3, 100, 100), dtype=float)
         
         
         # Construct the TX position channel
@@ -225,7 +262,7 @@ class RTDataset(Dataset):
         tx_position_channel[tx_position[1]][tx_position[0]] = tx_height
         combined_input[1,:, :] = tx_position_channel
         # Construct the Path Loss Model (3GPP TR 308.91 nLos UMa)
-        path_loss_heat_map = np.full((100, 100), 0, dtype=int)
+        path_loss_heat_map = np.full((100, 100), 0, dtype=float)
         
 
                 
@@ -237,7 +274,7 @@ class RTDataset(Dataset):
             for col in range(path_loss_heat_map.shape[1]):
                 # Compute the distance between pixel and tx
                 dist = math.sqrt((tx_position[1] - row)**2 + (tx_position[0] - col)**2)
-                path_loss_heat_map[row][col] = -1 * path_loss_res[int(dist)]
+                path_loss_heat_map[row][col] =  -1 * path_loss_res[int(dist)]
         combined_input[2,:, :] = path_loss_heat_map 
          
         
@@ -245,7 +282,8 @@ class RTDataset(Dataset):
         return {
             'combined_input': torch.as_tensor(combined_input.copy()).float().contiguous(),
             'ground_truth': torch.as_tensor(ground_truth_arr.copy()).long().contiguous(),
-            'file_name': name
+            'file_name': name,
+            'sparse_ss': torch.as_tensor(sparse_ss_arr.copy()).float().contiguous()
         }
     
     
@@ -256,4 +294,5 @@ if __name__ == '__main__':
     building_height_map_dir = Path('../../res/Bl_building_npy')
     terrain_height_map_dir = Path('../../res/Bl_terrain_npy')
     ground_truth_signal_strength_map_dir = Path('./coverage_maps')
+    sparse_ss_dir = Path('/home/yl826/3DPathLoss/nc_raytracing/jul18_sparse')
     dataset = RTDataset(building_height_map_dir, terrain_height_map_dir, ground_truth_signal_strength_map_dir)
