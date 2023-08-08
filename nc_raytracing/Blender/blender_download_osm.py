@@ -82,7 +82,7 @@ def producer(batch_lines, batch_idxs, queue, BLENDER_OSM_DOWNLOAD_PATH):
         #_ = wait(futures)
 
 if __name__ == '__main__':
-    load_dotenv(join(dirname(__file__), '.env'))
+    load_dotenv(join(dirname(__file__), '..', '.env'))
 
     BASE_PATH = os.environ.get('BASE_PATH')
     # BLENDER_PATH should be the path I built, since the things are enabled
