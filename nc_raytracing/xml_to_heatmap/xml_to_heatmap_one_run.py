@@ -129,9 +129,8 @@ def generate_coverage_map_config_combination(file_path):
             cm_conf_dict.append([*cm_conf,height+ building_height_at_xy_position])
     print(cm_conf_dict)
     return cm_conf_dict
-    
- 
-    
+   
+
     
 
 
@@ -203,7 +202,7 @@ def cm_routine(extra_height):
             
             cm_only_start = time.time()
             cm = scene.coverage_map(max_depth=8, cm_center=[0, 0, extra_height], cm_orientation=[0, 0, 0],
-                                    cm_cell_size=[args.cm_cell_size, args.cm_cell_size], cm_size=[1000, 1000], los=True, reflection=True, diffraction=True, num_samples=int(4*10**7))
+                                    cm_cell_size=[args.cm_cell_size, args.cm_cell_size], cm_size=[1000, 1000], los=True, reflection=True, diffraction=True, num_samples=int(4e7))
             
             print('compute cm only time: ', str(time.time() - cm_only_start))
                 

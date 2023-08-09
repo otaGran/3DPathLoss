@@ -14,13 +14,13 @@ from tqdm import tqdm
 # testing new Blender_command_line function written on 23. Jun 2023
 BASE_PATH_BLENDER = '/dev/shm/res_plane/'
 #BASE_PATH_SIONNA = '/dev/shm/coverage_maps_data_aug_Jul20_1000/'
-BASE_PATH_SIONNA = '/home/yl826/3DPathLoss/nc_raytracing/cm_1000_Jul20/'
+BASE_PATH_SIONNA = '/home/yl826/3DPathLoss/nc_raytracing/cm_200_Aug3/'
 # BASE_PATH_SIONNA = '/home/yl826/3DPathLoss/nc_raytracing/Sionna_coverage_maps/coverage_maps_plane_missing_Jul6/'
 # un-comment 
 # BASE_PATH_BLENDER = 'res/res_23Jun23/'
 # BASE_PATH_SIONNA = 'Sionna_coverage_maps/coverage_maps_new_22Jun23/'
 # START_FROM_IDX = 512
-STOP_AT_IDX = 1
+STOP_AT_IDX = 100
 
 
 NUM_OF_PROCESS = 2
