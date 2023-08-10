@@ -30,6 +30,8 @@ parser.add_argument('-c', '--cm_cell_size', type=float, required=False, default=
 parser.add_argument('-b', '--BASE_PATH_BLENDER', type=str, required=False, default='/res/')
 parser.add_argument('-s', '--BASE_PATH_SIONNA', type=str, required=True)
 parser.add_argument('-n', '--outer_idx', type=int, required=True)
+parser.add_argument('-m', '--cm_num_samples', type=int, required=True)
+parser.add_argument('-a', '--antenna_pattern', type=str, required=True)
 args = parser.parse_args()
 # print('height file name: ', args.height_file)
 # print('extra height: ', args.extra_height)
@@ -41,7 +43,7 @@ BASE_PATH_SIONNA = args.BASE_PATH_SIONNA
 """
     Setting up the environment, including the GPUs
 """
-gpu_num = 0 # Use "" to use the CPU
+# gpu_num = 0 # Use "" to use the CPU
 
 
 gpus = tf.config.list_physical_devices('GPU')
@@ -54,6 +56,7 @@ if gpus:
         print(len(gpus), 'Physical GPUs, ', len(logical_gpus), 'Logical GPUs')
     except RuntimeError as e:
         print(e)  # Avoid warnings from TensorFlow
+        
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 tf.random.set_seed(1) # Set global random seed for reproducibility
@@ -61,8 +64,11 @@ tf.random.set_seed(1) # Set global random seed for reproducibility
 
 def generate_coverage_map_config_combination(file_path):
     
-    building_npy = np.load(file_path)[4:104,4:104]
+    #building_npy = np.load(file_path)[4:104,4:104]
     
+    
+    # 1000 * 1000
+    building_npy = np.load(file_path)
     """
     ----------
     ----------
@@ -82,11 +88,16 @@ def generate_coverage_map_config_combination(file_path):
     for cm_conf in tx_xy_position:
         x = cm_conf[0] + 500
         y = cm_conf[1] + 500
-        x /= 10
-        y /= 10
+        
+        # x /= 10
+        # y /= 10
+        
         x = int(x)
         y = int(y)
-        building_height_at_xy_position = np.max(building_npy[x-2:x+2,y-2:y+2])
+        
+        # Obtain the max height of the area
+        building_height_at_xy_position = np.max(building_npy[x-512:x+512,y-512:y+512])
+        
         for height in tx_height:
             cm_conf_dict.append([*cm_conf,height+ building_height_at_xy_position])
     print(cm_conf_dict)
@@ -123,7 +134,7 @@ def cm_routine(extra_height):
                                   num_cols=1,
                                   vertical_spacing=0.5,
                                   horizontal_spacing=0.5,
-                                  pattern="tr38901",
+                                  pattern=args.antenna_pattern,
                                   polarization="VH")
 
         # Configure antenna array for all receivers
@@ -158,7 +169,7 @@ def cm_routine(extra_height):
                           orientation=[0, 0, 0])
             scene.add(tx)
 
-            scene.frequency = 2.14e9 # in Hz; implicitly updates RadioMaterials
+            scene.frequency = 3.66e9 # in Hz; implicitly updates RadioMaterials
             #scene.synthetic_array = True 
             # If set to False, ray tracing will be done per antenna element (slower for large arrays)
 
@@ -169,7 +180,7 @@ def cm_routine(extra_height):
                                     cm_orientation=[0, 0, 0],
                                     cm_cell_size=[args.cm_cell_size, args.cm_cell_size], 
                                     cm_size=[512, 512], los=True, reflection=True, diffraction=True, 
-                                    num_samples=int(4e7))
+                                    num_samples=args.cm_num_samples)
             
             print('compute cm only time: ', str(time.time() - cm_only_start))
                 
