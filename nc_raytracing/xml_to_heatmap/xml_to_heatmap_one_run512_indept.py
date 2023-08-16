@@ -1,4 +1,3 @@
-
 import os # Configure which GPU
 
 import time
@@ -15,68 +14,36 @@ from sionna.rt import load_scene, Transmitter, Receiver, PlanarArray, Camera
 
 f_name_xml = '6182_40c6a006-c2ce-4261-afee-72dd36fd0262'  # should be idx_uuid
 
-EXTRA_HEIGHT = 2  # height of Rx above ground. 
 CM_RESOLUTION = 4  # size in meters of each pixel in the coverage map
 ANTENNA_PATTERN = 'iso'  # 'tr38901' also possible
 
-
-BASE_PATH_BLENDER = '/path/to/res_plane/'  # path to res folder, structure should be
+# BASE_PATH = 'res_plane/'
+BASE_PATH = '/path/to/res_plane/'  # path to res folder, structure should be
 # res_folder_git_issue/
 #     Bl_building_npy/
 #     Bl_terrain_npy/  # should be empty
 #     Bl_xml_files/
 #     height_at_origin/   # should be empty
 
-CM_NUM_SAMPLES = int(7e6)  # input for the num_samples in scene.coverage_map (sionna method), default 2e6
 
 BASE_PATH_SIONNA = '/path/to/coverage_map/' 
+# BASE_PATH_SIONNA = '/home/yl826/3DPathLoss/nc_raytracing/xml_to_heatmap/git_test/' 
 # path to folder that stores coverage_maps
 os.makedirs(BASE_PATH_SIONNA, exist_ok=True)
 
 
-"""
-    Parse arguments
-"""
-# parser = argparse.ArgumentParser()
 file_name_wo_type = f_name_xml  # idx_uuid, e.g. 6182_40c6a006-c2ce-4261-afee-72dd36fd0262
-# parser.add_argument('-t', '--file_name_wo_type', type=str, required=True)
-# extra_height is added to the height above the xy-plane of the terrain/building at the origin when
-# placing Tx and when calculating signal strength in the coverage_map function
 
-extra_height = EXTRA_HEIGHT
-# parser.add_argument('-e', '--extra_height', type=float, required=True)
-# parser.add_argument('end', nargs='?', type=int, required=True)
+extra_height = 2  # height of Rx above ground. 
 
-cm_cell_size = CM_RESOLUTION
-# parser.add_argument('-c', '--cm_cell_size', type=float, required=False, default=10)
-
-# defined above
-# parser.add_argument('-b', '--BASE_PATH_BLENDER', type=str, required=False, default='/res/')
-
-# defined above
-# parser.add_argument('-s', '--BASE_PATH_SIONNA', type=str, required=True)
+cm_cell_size = 4  # size in meters of each pixel in the coverage map
 
 outer_idx = 0  # this arg doesn't affect anything
-# parser.add_argument('-n', '--outer_idx', type=int, required=True)
 
-cm_num_samples = CM_NUM_SAMPLES
-# parser.add_argument('-m', '--cm_num_samples', type=int, required=True)
+cm_num_samples = int(7e6)  # input for the num_samples in scene.coverage_map (sionna method), default 2e6
 
-antenna_pattern = ANTENNA_PATTERN
-# parser.add_argument('-a', '--antenna_pattern', type=str, required=True)
-# args = parser.parse_args()
-# print('height file name: ', args.height_file)
-# print('extra height: ', args.extra_height)
-BASE_PATH = BASE_PATH_BLENDER
-# BASE_PATH = args.BASE_PATH_BLENDER
-# BASE_PATH_SIONNA = args.BASE_PATH_SIONNA
+antenna_pattern = 'iso'
 
-
-
-"""
-    Setting up the environment, including the GPUs
-"""
-# gpu_num = 0 # Use "" to use the CPU
 
 
 gpus = tf.config.list_physical_devices('GPU')
@@ -96,24 +63,8 @@ tf.random.set_seed(1) # Set global random seed for reproducibility
 
 
 def generate_coverage_map_config_combination(file_path):
-    
-    #building_npy = np.load(file_path)[4:104,4:104]
-    
-    
-    # 1000 * 1000
+
     building_npy = np.load(file_path)
-    """
-    ----------
-    ----------
-    --TX----TX--
-    ----------
-    ----------
-    ----TX-----
-    ----------
-    ----------
-    --TX----TX--
-    ----------
-    """
     tx_xy_position = [[-244,244], [-244,-244], [244,244], [244,-244]]
     tx_height = [2]
     
@@ -121,9 +72,6 @@ def generate_coverage_map_config_combination(file_path):
     for cm_conf in tx_xy_position:
         x = cm_conf[0] + 500
         y = cm_conf[1] + 500
-        
-        # x /= 10
-        # y /= 10
         
         x = int(x)
         y = int(y)
@@ -135,9 +83,6 @@ def generate_coverage_map_config_combination(file_path):
             cm_conf_dict.append([*cm_conf,height+ building_height_at_xy_position])
     print(cm_conf_dict)
     return cm_conf_dict
-   
-
-    
 
 
 def cm_routine(extra_height):
@@ -156,9 +101,7 @@ def cm_routine(extra_height):
                 break
         if exist:
             return
-        
-        #_,_,_,_,_, height_at_origin, file_name = get_data_from_HeightFile(f_ptr_height=f_ptr_height)
-        
+                
         start_loc = time.time()
         scene = load_scene(BASE_PATH + 'Bl_xml_files/' + file_name + '/' + file_name + '.xml')
         print('load scene time: ', str(time.time() - start_loc))
@@ -177,10 +120,6 @@ def cm_routine(extra_height):
                                   horizontal_spacing=0.5,
                                   pattern="iso",
                                   polarization="cross")
-        
-        
-
-        
         
         for cm_conf in cm_conf_dict:
             image_path = BASE_PATH_SIONNA + file_name
@@ -203,11 +142,8 @@ def cm_routine(extra_height):
             scene.add(tx)
 
             scene.frequency = 3.66e9 # in Hz; implicitly updates RadioMaterials
-            #scene.synthetic_array = True 
-            # If set to False, ray tracing will be done per antenna element (slower for large arrays)
-
-            # Compute coverage map
             
+            # Compute coverage map
             cm_only_start = time.time()
             cm = scene.coverage_map(max_depth=8, cm_center=[cm_conf[0], cm_conf[1], extra_height], 
                                     cm_orientation=[0, 0, 0],
@@ -220,12 +156,7 @@ def cm_routine(extra_height):
             print("images path",image_path)
             
             cm_tensor = cm.as_tensor()
-            
             cm_2D = cm_tensor.numpy()[0, :, :]
-
-            
-            #cm_2D_dB = 10*np.log10(cm_2D)
-
             # saving as db and do a flip with axis 0
             np.save(image_path, np.flip(cm_2D,0))
             
